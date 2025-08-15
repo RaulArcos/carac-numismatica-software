@@ -1,0 +1,73 @@
+name: Build Windows Executable
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: latest
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+    
+    - name: Load cached venv
+      id: cached-poetry-dependencies
+      uses: actions/cache@v3
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
+    
+    - name: Install dependencies
+      if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+      run: poetry install --with packaging
+    
+    - name: Install dependencies (cached)
+      if: steps.cached-poetry-dependencies.outputs.cache-hit == 'true'
+      run: poetry install --with packaging --no-root
+    
+    - name: Run tests
+      run: poetry run pytest
+    
+    - name: Run linting
+      run: poetry run ruff check src/
+    
+    - name: Run type checking
+      run: poetry run mypy src/carac
+    
+    - name: Build executable
+      run: poetry run pyinstaller packaging/pyinstaller/carac.spec
+    
+    - name: Upload executable artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: carac-windows
+        path: dist/carac.exe
+        retention-days: 30
+    
+    - name: Create release
+      if: github.event_name == 'release'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist/carac.exe
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
