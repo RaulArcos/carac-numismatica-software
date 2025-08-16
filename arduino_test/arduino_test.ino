@@ -1,9 +1,9 @@
 #include <ArduinoJson.h>
 
-const int LED_PIN = 13;
+const int LED_PIN = 13;  // Built-in LED for feedback
 const int TEST_LED_1 = 9;
 const int TEST_LED_2 = 10;
-const int TEST_LED = 12;  // Using pin 12 for test LED
+const int TEST_LED = 25;  // Using RX LED (pin 25) for toggle - this is an integrated LED on Leonardo
 
 const unsigned long BAUD_RATE = 9600;
 const int BUFFER_SIZE = 512;
@@ -187,17 +187,45 @@ void handlePhotoSequenceCommand(JsonDocument& doc) {
 }
 
 void handleLedToggleCommand() {
-  testLedState = !testLedState;
-  digitalWrite(TEST_LED, testLedState ? HIGH : LOW);
-  
-  // Simple debug - flash the built-in LED to show the command was processed
+  // Step 1: Command received - flash LED once
   digitalWrite(LED_PIN, HIGH);
-  delay(50);
+  delay(100);
   digitalWrite(LED_PIN, LOW);
   
+  // Step 2: Toggle the test LED state
+  bool previousState = testLedState;
+  testLedState = !testLedState;
+  
+  // Step 3: Set the test LED based on new state
+  if (testLedState) {
+    digitalWrite(TEST_LED, HIGH);  // Turn LED ON
+  } else {
+    digitalWrite(TEST_LED, LOW);   // Turn LED OFF
+  }
+  
+  // Step 4: Visual feedback - different patterns for ON vs OFF
+  if (testLedState) {
+    // LED turned ON - flash twice quickly
+    digitalWrite(LED_PIN, HIGH);
+    delay(50);
+    digitalWrite(LED_PIN, LOW);
+    delay(50);
+    digitalWrite(LED_PIN, HIGH);
+    delay(50);
+    digitalWrite(LED_PIN, LOW);
+  } else {
+    // LED turned OFF - flash once slowly
+    digitalWrite(LED_PIN, HIGH);
+    delay(200);
+    digitalWrite(LED_PIN, LOW);
+  }
+  
+  // Step 5: Send JSON response with clear state information
   JsonObject ledData = JsonObject();
   ledData["state"] = testLedState;
-  sendResponse(true, "LED toggled", ledData);
+  ledData["previous_state"] = previousState;
+  ledData["action"] = testLedState ? "turned_on" : "turned_off";
+  sendResponse(true, testLedState ? "LED turned ON" : "LED turned OFF", ledData);
 }
 
 void sendStatusUpdate() {
