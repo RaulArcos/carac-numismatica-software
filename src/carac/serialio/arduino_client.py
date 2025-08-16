@@ -92,11 +92,15 @@ class ArduinoClient:
                 self.serial.write(command_data.encode('utf-8'))
                 self.serial.flush()
                 
-                response_data = self.serial.readline().decode('utf-8').strip()
+                # Wait a bit for the Arduino to process
+                time.sleep(0.1)
                 
-                if response_data:
+                response_data = self.serial.readline().decode('utf-8').strip()
+                logger.debug(f"Raw response: {response_data}")
+                
+                if response_data and response_data.strip():
                     response = Response.from_serial(response_data)
-                    logger.debug(f"Received response: {response}")
+                    logger.debug(f"Parsed response: {response}")
                     return response
                 else:
                     logger.warning("No response received from Arduino")
@@ -125,6 +129,12 @@ class ArduinoClient:
         from ..protocol.models import PhotoSequenceCommand
         
         command = PhotoSequenceCommand(count=count, delay=delay)
+        return self.send_command(command)
+    
+    def toggle_led(self) -> Optional[Response]:
+        from ..protocol.models import LedToggleCommand
+        
+        command = LedToggleCommand()
         return self.send_command(command)
     
     def set_response_callback(self, callback: Callable[[Response], None]) -> None:

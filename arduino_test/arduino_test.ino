@@ -3,6 +3,7 @@
 const int LED_PIN = 13;
 const int TEST_LED_1 = 9;
 const int TEST_LED_2 = 10;
+const int TEST_LED = 12;  // Using pin 12 for test LED
 
 const unsigned long BAUD_RATE = 9600;
 const int BUFFER_SIZE = 512;
@@ -12,6 +13,8 @@ int bufferIndex = 0;
 unsigned long lastPingTime = 0;
 const unsigned long PING_INTERVAL = 5000;
 
+bool testLedState = false;  // Track the state of the test LED
+
 void setup() {
   Serial.begin(BAUD_RATE);
   Serial.println("Arduino Test Software Started");
@@ -20,10 +23,12 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   pinMode(TEST_LED_1, OUTPUT);
   pinMode(TEST_LED_2, OUTPUT);
+  pinMode(TEST_LED, OUTPUT);
   
   digitalWrite(LED_PIN, LOW);
   analogWrite(TEST_LED_1, 0);
   analogWrite(TEST_LED_2, 0);
+  digitalWrite(TEST_LED, LOW);
   
   JsonObject initData = JsonObject();
   initData["status"] = "ready";
@@ -43,16 +48,14 @@ void loop() {
     }
   }
   
-  if (millis() - lastPingTime > PING_INTERVAL) {
-    sendStatusUpdate();
-    lastPingTime = millis();
-  }
+  // Comment out periodic status updates for now to avoid interference
+  // if (millis() - lastPingTime > PING_INTERVAL) {
+  //   sendStatusUpdate();
+  //   lastPingTime = millis();
+  // }
 }
 
 void processCommand(const char* jsonCommand) {
-  Serial.print("Received: ");
-  Serial.println(jsonCommand);
-  
   StaticJsonDocument<512> doc;
   DeserializationError error = deserializeJson(doc, jsonCommand);
   
@@ -77,6 +80,8 @@ void processCommand(const char* jsonCommand) {
     handleLightingCommand(doc);
   } else if (strcmp(commandType, "photo_sequence") == 0) {
     handlePhotoSequenceCommand(doc);
+  } else if (strcmp(commandType, "led_toggle") == 0) {
+    handleLedToggleCommand();
   } else {
     JsonObject errorData = JsonObject();
     errorData["received_type"] = commandType;
@@ -100,6 +105,7 @@ void handleStatusCommand() {
   data["free_memory"] = freeMemory();
   data["led_1_intensity"] = analogRead(TEST_LED_1);
   data["led_2_intensity"] = analogRead(TEST_LED_2);
+  data["test_led_state"] = testLedState;
   
   sendResponse(true, "Status report", data);
 }
@@ -180,11 +186,26 @@ void handlePhotoSequenceCommand(JsonDocument& doc) {
   sendResponse(true, "Photo sequence completed", completeData);
 }
 
+void handleLedToggleCommand() {
+  testLedState = !testLedState;
+  digitalWrite(TEST_LED, testLedState ? HIGH : LOW);
+  
+  // Simple debug - flash the built-in LED to show the command was processed
+  digitalWrite(LED_PIN, HIGH);
+  delay(50);
+  digitalWrite(LED_PIN, LOW);
+  
+  JsonObject ledData = JsonObject();
+  ledData["state"] = testLedState;
+  sendResponse(true, "LED toggled", ledData);
+}
+
 void sendStatusUpdate() {
   JsonObject data = JsonObject();
   data["uptime"] = millis();
   data["free_memory"] = freeMemory();
   data["status"] = "idle";
+  data["test_led_state"] = testLedState;
   
   sendResponse(true, "Periodic status update", data);
 }

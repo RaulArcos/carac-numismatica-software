@@ -171,6 +171,10 @@ class MainWindow(QMainWindow):
         self.start_photo_button.setStyleSheet("background-color: #4CAF50; color: black; font-weight: bold;")
         layout.addWidget(self.start_photo_button, 2, 0, 1, 2)
         
+        self.toggle_led_button = QPushButton("Toggle Test LED")
+        self.toggle_led_button.setStyleSheet("background-color: #FF9800; color: black; font-weight: bold;")
+        layout.addWidget(self.toggle_led_button, 3, 0, 1, 2)
+        
         return group
     
     def create_right_panel(self) -> QWidget:
@@ -212,6 +216,8 @@ class MainWindow(QMainWindow):
             )
         
         self.start_photo_button.clicked.connect(self.start_photo_sequence)
+        
+        self.toggle_led_button.clicked.connect(self.toggle_test_led)
         
         self.port_refresh_thread.ports_updated.connect(self.update_port_list)
     
@@ -378,6 +384,20 @@ class MainWindow(QMainWindow):
             self.log_message("Photo sequence started")
         else:
             self.log_message("Failed to start photo sequence", error=True)
+    
+    def toggle_test_led(self):
+        if not self.session_controller.is_connected:
+            QMessageBox.warning(self, "Error", "Not connected to Arduino")
+            return
+        
+        self.log_message("Toggling test LED...")
+        
+        success = self.session_controller.toggle_led()
+        
+        if success:
+            self.log_message("Test LED toggled successfully")
+        else:
+            self.log_message("Failed to toggle test LED", error=True)
     
     def on_arduino_response(self, response: Response):
         if response.success:

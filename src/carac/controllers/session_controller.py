@@ -104,6 +104,20 @@ class SessionController:
         
         return self.arduino_client.get_status()
     
+    def toggle_led(self) -> bool:
+        if not self.arduino_client.is_connected:
+            logger.warning("Not connected to Arduino")
+            return False
+        
+        response = self.arduino_client.toggle_led()
+        
+        if response and response.success:
+            logger.info("LED toggled successfully")
+            return True
+        else:
+            logger.error("Failed to toggle LED")
+            return False
+    
     def add_status_callback(self, callback: Callable[[ConnectionStatus], None]) -> None:
         self._status_callbacks.append(callback)
     

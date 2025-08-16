@@ -9,6 +9,7 @@ class CommandType(str, Enum):
     PHOTO_SEQUENCE = "photo_sequence"
     PING = "ping"
     STATUS = "status"
+    LED_TOGGLE = "led_toggle"
 
 
 class ConnectionStatus(str, Enum):
@@ -38,6 +39,13 @@ class Response(BaseModel):
     def from_serial(cls, data: str) -> "Response":
         import json
         try:
+            if not data or not data.strip():
+                return cls(
+                    success=False,
+                    message="Empty response received",
+                    data={"raw": data}
+                )
+            
             parsed = json.loads(data.strip())
             return cls(**parsed)
         except (json.JSONDecodeError, ValueError) as e:
@@ -88,3 +96,11 @@ class StatusCommand(Command):
     def __init__(self, **data):
         super().__init__(**data)
         self.data = {"status": True}
+
+
+class LedToggleCommand(Command):
+    type: CommandType = Field(default=CommandType.LED_TOGGLE, frozen=True)
+    
+    def __init__(self, **data):
+        super().__init__(**data)
+        self.data = {"toggle": True}
