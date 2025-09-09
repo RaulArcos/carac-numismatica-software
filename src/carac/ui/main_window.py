@@ -356,10 +356,31 @@ class MainWindow(QMainWindow):
         self.start_photo_button.setMinimumHeight(30)
         buttons_layout.addWidget(self.start_photo_button)
         
+        # LED button with status indicator layout
+        led_layout = QHBoxLayout()
+        
         self.toggle_led_button = QPushButton("LED de Prueba")
         style_manager.apply_button_style(self.toggle_led_button, "warning")
         self.toggle_led_button.setMinimumHeight(25)
-        buttons_layout.addWidget(self.toggle_led_button)
+        led_layout.addWidget(self.toggle_led_button)
+        
+        # LED status indicator
+        self.led_status_label = QLabel("●")
+        self.led_status_label.setFixedSize(20, 20)
+        self.led_status_label.setAlignment(Qt.AlignCenter)
+        self.led_status_label.setStyleSheet("""
+            QLabel {
+                color: #666666;
+                font-size: 16px;
+                font-weight: bold;
+                border-radius: 10px;
+                background-color: #f0f0f0;
+            }
+        """)
+        self.led_status_label.setToolTip("Estado del LED L del Arduino")
+        led_layout.addWidget(self.led_status_label)
+        
+        buttons_layout.addLayout(led_layout)
         
         layout.addLayout(buttons_layout)
         
@@ -600,14 +621,57 @@ class MainWindow(QMainWindow):
         
         self.log_message("Alternando LED de prueba...")
         
-        success = self.session_controller.toggle_led()
+        response = self.session_controller.toggle_led()
         
-        if success:
-            self.log_message("LED de prueba alternado correctamente")
+        if response and response.success:
+            # Extract LED state from response data
+            led_state = response.data.get('led_state', False) if response.data else False
+            self.update_led_status(led_state)
+            
+            state_text = "encendido" if led_state else "apagado"
+            self.log_message(f"LED de prueba {state_text}")
         else:
             self.log_message("Error al alternar LED de prueba", error=True)
     
+    def update_led_status(self, led_on: bool):
+        """Update the LED status indicator in the UI"""
+        if led_on:
+            # Green for LED ON
+            self.led_status_label.setStyleSheet("""
+                QLabel {
+                    color: #ffffff;
+                    font-size: 16px;
+                    font-weight: bold;
+                    border-radius: 10px;
+                    background-color: #4CAF50;
+                }
+            """)
+            self.led_status_label.setToolTip("LED L encendido")
+        else:
+            # Gray for LED OFF
+            self.led_status_label.setStyleSheet("""
+                QLabel {
+                    color: #666666;
+                    font-size: 16px;
+                    font-weight: bold;
+                    border-radius: 10px;
+                    background-color: #f0f0f0;
+                }
+            """)
+            self.led_status_label.setToolTip("LED L apagado")
+    
     def on_arduino_response(self, response: Response):
+        # Update LED status if present in response
+        if response.data and 'led_state' in response.data:
+            led_state = response.data['led_state']
+            self.update_led_status(led_state)
+            
+        # Always log raw data if available for debugging
+        if "raw" in response.data:
+            raw_data = response.data["raw"]
+            # Show raw data with special formatting
+            self.log_message(f"RAW: '{raw_data}' (len={len(raw_data)}, bytes={[ord(c) for c in raw_data[:20]]})", error=True)
+        
         if response.success:
             self.log_message(f"Arduino: {response.message}")
             # Update Arduino status card

@@ -26,7 +26,9 @@ class Command(BaseModel):
     
     def to_serial(self) -> str:
         import json
-        return json.dumps(self.model_dump()) + "\n"
+        # Remove None/null values to avoid Arduino JSON parsing issues
+        data = {k: v for k, v in self.model_dump().items() if v is not None}
+        return json.dumps(data) + "\n"
 
 
 class Response(BaseModel):
@@ -62,11 +64,26 @@ class LightingCommand(Command):
     intensity: int = Field(..., ge=0, le=255, description="Lighting intensity (0-255)")
     
     def __init__(self, **data):
-        super().__init__(**data)
+        # Don't pass channel and intensity to parent to avoid duplication
+        command_data = {k: v for k, v in data.items() if k not in ['channel', 'intensity']}
+        super().__init__(**command_data)
+        self.channel = data['channel']
+        self.intensity = data['intensity']
         self.data = {
             "channel": self.channel,
             "intensity": self.intensity
         }
+    
+    def to_serial(self) -> str:
+        import json
+        # Only include type and data to avoid field duplication
+        serialized_data = {
+            "type": self.type,
+            "data": self.data
+        }
+        if self.timestamp is not None:
+            serialized_data["timestamp"] = self.timestamp
+        return json.dumps(serialized_data) + "\n"
 
 
 class PhotoSequenceCommand(Command):
@@ -75,11 +92,26 @@ class PhotoSequenceCommand(Command):
     delay: float = Field(default=1.0, ge=0.1, le=10.0, description="Delay between photos")
     
     def __init__(self, **data):
-        super().__init__(**data)
+        # Don't pass count and delay to parent to avoid duplication
+        command_data = {k: v for k, v in data.items() if k not in ['count', 'delay']}
+        super().__init__(**command_data)
+        self.count = data.get('count', 5)
+        self.delay = data.get('delay', 1.0)
         self.data = {
             "count": self.count,
             "delay": self.delay
         }
+    
+    def to_serial(self) -> str:
+        import json
+        # Only include type and data to avoid field duplication
+        serialized_data = {
+            "type": self.type,
+            "data": self.data
+        }
+        if self.timestamp is not None:
+            serialized_data["timestamp"] = self.timestamp
+        return json.dumps(serialized_data) + "\n"
 
 
 class PingCommand(Command):

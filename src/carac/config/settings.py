@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     )
     
     default_baud_rate: int = Field(default=9600, description="Default baud rate for serial communication")
-    default_timeout: float = Field(default=1.0, description="Default timeout for serial operations")
+    default_timeout: float = Field(default=5.0, description="Default timeout for serial operations")
     max_retries: int = Field(default=3, description="Maximum number of retries for serial operations")
     
     lighting_channels: List[str] = Field(
@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     window_height: int = Field(default=600, description="Default window height")
     theme: str = Field(default="light", description="UI theme (light/dark)")
     
-    log_level: str = Field(default="INFO", description="Logging level")
+    log_level: str = Field(default="DEBUG", description="Logging level")
     log_to_file: bool = Field(default=True, description="Enable file logging")
     log_retention_days: int = Field(default=30, description="Log file retention in days")
     
