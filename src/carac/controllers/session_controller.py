@@ -99,7 +99,6 @@ class SessionController:
         return self.arduino_client.ping()
     
     def test_communication(self) -> bool:
-        """Test communication with Arduino"""
         return self.arduino_client.test_communication()
     
     def get_status(self) -> Optional[Response]:

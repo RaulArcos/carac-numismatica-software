@@ -27,10 +27,7 @@ class ArduinoClient:
         
         self._pending_response: Optional[Response] = None
         self._response_event = Event()
-        self._command_timeout = 2.0 
-
-        
-        
+        self._command_timeout = 2.0
     def connect(self, port: str, baud_rate: Optional[int] = None) -> bool:
         if self.status == ConnectionStatus.CONNECTED:
             logger.warning("Already connected to Arduino")
@@ -57,11 +54,8 @@ class ArduinoClient:
                 
                 self._start_reading()
                 
-                # Just wait a short time for initial ready message
                 time.sleep(0.2)
                 
-                # Don't do ping during connection to avoid UI blocking
-                # Ping will be done separately if needed
                 logger.info("Connection established, ping will be tested separately")
                 return True
             else:
@@ -102,7 +96,6 @@ class ArduinoClient:
         
         try:
             with self.lock:
-                # Clear any previous response and reset event
                 self._pending_response = None
                 self._response_event.clear()
                 logger.debug("Cleared pending response and event before sending command")
@@ -115,7 +108,7 @@ class ArduinoClient:
                 
                 logger.debug(f"Command sent, waiting for response (timeout: {self._command_timeout}s)")
                 
-            # Release lock while waiting to allow response processing
+            
             logger.debug(f"Waiting for response event (timeout: {self._command_timeout}s)")
             if self._response_event.wait(timeout=self._command_timeout):
                 with self.lock:
@@ -144,16 +137,14 @@ class ArduinoClient:
         return response is not None and response.success
     
     def test_communication(self) -> bool:
-        """Test communication with Arduino after connection"""
         if not self.is_connected:
             logger.warning("Cannot test communication - not connected")
             return False
             
         logger.info("Testing Arduino communication...")
         
-        # Try ping with a longer timeout for testing
         original_timeout = self._command_timeout
-        self._command_timeout = 5.0  # 5 second timeout for testing
+        self._command_timeout = 5.0
         
         try:
             success = self.ping()
@@ -201,10 +192,8 @@ class ArduinoClient:
                 if self.serial.in_waiting > 0:
                     data = self.serial.readline().decode('utf-8').strip()
                     if data:
-                        # Log the raw data for debugging
                         logger.info(f"RAW Arduino response: {repr(data)}")
                         
-                        # Skip ACK messages and other non-JSON responses
                         if data.startswith('ACK:') or not data.startswith('{'):
                             logger.debug(f"Ignoring non-JSON response: {data}")
                             continue
@@ -212,7 +201,6 @@ class ArduinoClient:
                         response = Response.from_serial(data)
                         logger.debug(f"Parsed response: {response}")
                         
-                        # Route response appropriately
                         self._route_response(response)
                 
                 time.sleep(0.01)
@@ -224,8 +212,6 @@ class ArduinoClient:
         logger.debug("Read loop stopped")
     
     def _route_response(self, response: Response) -> None:
-        """Route response to either synchronous command waiter or async callback"""
-        # Check if we have a pending synchronous command waiting for response
         with self.lock:
             event_is_set = self._response_event.is_set()
             has_pending_response = self._pending_response is not None
@@ -233,7 +219,6 @@ class ArduinoClient:
             logger.debug(f"Routing response - event_set: {event_is_set}, has_pending: {has_pending_response}, response: {response}")
             
             if not event_is_set and not has_pending_response:
-                # This might be for a synchronous command
                 self._pending_response = response
                 logger.debug(f"Setting pending response: {response}")
                 self._response_event.set()
@@ -241,7 +226,6 @@ class ArduinoClient:
                 logger.debug(f"Event set, event_is_set now: {self._response_event.is_set()}")
                 return
         
-        # This is an async response (like status updates or unsolicited messages)
         logger.info("Response routed to async callback")
         if self._response_callback:
             try:

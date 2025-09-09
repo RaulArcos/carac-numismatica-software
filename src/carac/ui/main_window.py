@@ -14,16 +14,13 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QSpinBox,
     QDoubleSpinBox,
-    QProgressBar,
     QMessageBox,
-    QSplitter,
     QFrame,
-    QScrollArea,
     QFileDialog,
     QSizePolicy,
 )
 from PySide6.QtCore import Qt, QTimer, Signal, QThread
-from PySide6.QtGui import QFont, QIcon, QPixmap
+from PySide6.QtGui import QIcon
 
 from loguru import logger
 
@@ -62,12 +59,10 @@ class MainWindow(QMainWindow):
     def setup_ui(self):
         self.setWindowTitle("CARAC - Control Numismático UCA")
         
-        # Set application icon
-        # Try different paths for development and packaged app
         possible_icon_paths = [
-            Path(__file__).parent.parent.parent.parent / "assets" / "ui" / "logo.png",  # Development
-            Path.cwd() / "assets" / "ui" / "logo.png",  # Packaged app
-            Path(__file__).parent / "assets" / "ui" / "logo.png",  # Alternative
+            Path(__file__).parent.parent.parent.parent / "assets" / "ui" / "logo.png",
+            Path.cwd() / "assets" / "ui" / "logo.png",
+            Path(__file__).parent / "assets" / "ui" / "logo.png",
         ]
         
         for icon_path in possible_icon_paths:
@@ -78,46 +73,38 @@ class MainWindow(QMainWindow):
         else:
             logger.warning("Application icon not found")
         
-        # Make window compact and responsive
         self.setGeometry(100, 100, 1000, 700)
         self.setMinimumSize(900, 600)
         
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
-        # Main layout with compact margins
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
         
-        # Header section
         header = self.create_header()
         main_layout.addWidget(header)
         
-        # Content layout
         content_layout = QHBoxLayout()
         content_layout.setSpacing(10)
         
-        # Left panel - Activity log (smaller space)
         left_panel = self.create_left_panel()
-        content_layout.addWidget(left_panel, 1)  # Smaller space for activity log
+        content_layout.addWidget(left_panel, 1)
         
-        # Right panel with controls (larger space, no scroll)
         right_panel = self.create_right_panel()
-        content_layout.addWidget(right_panel, 2)  # More space for controls
+        content_layout.addWidget(right_panel, 2)
         
         main_layout.addLayout(content_layout, 1)
         
         self.apply_styles()
     
     def create_header(self) -> QWidget:
-        """Create modern header with title and status cards"""
         header_widget = QWidget()
         header_layout = QVBoxLayout(header_widget)
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(8)
         
-        # Title section
         title_layout = QHBoxLayout()
         title_layout.setContentsMargins(0, 0, 0, 0)
         
@@ -132,19 +119,15 @@ class MainWindow(QMainWindow):
         title_layout.addStretch()
         header_layout.addLayout(title_layout)
         
-        # Status cards section (similar to dashboard)
         status_layout = QHBoxLayout()
         status_layout.setSpacing(8)
         
-        # Connection status card
         self.connection_card = self.create_status_card("Conexión", "Desconectado", "#dc3545")
         status_layout.addWidget(self.connection_card)
         
-        # Arduino status card
         self.arduino_card = self.create_status_card("Estado Arduino", "Sin datos", "#8C8984")
         status_layout.addWidget(self.arduino_card)
         
-        # Photo count card
         self.photo_card = self.create_status_card("Fotos Tomadas", "0", "#00607C")
         status_layout.addWidget(self.photo_card)
         
@@ -154,7 +137,6 @@ class MainWindow(QMainWindow):
         return header_widget
     
     def create_status_card(self, title: str, value: str, color: str) -> QWidget:
-        """Create a status card similar to the dashboard image"""
         card = QFrame()
         card.setFrameStyle(QFrame.NoFrame)
         card.setStyleSheet("""
@@ -177,26 +159,22 @@ class MainWindow(QMainWindow):
         layout.addWidget(title_label)
         
         value_label = QLabel(value)
-        # Set initial state based on the value/color
         initial_state = "disconnected" if "Desconectado" in value else "inactive"
         style_manager.apply_card_value_style(value_label, initial_state)
         layout.addWidget(value_label)
         
         layout.addStretch()
         
-        # Store reference to value label for updates
         card.value_label = value_label
         
         return card
     
     def create_left_panel(self) -> QWidget:
-        """Create left panel with activity log"""
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
         
-        # Activity log - takes up most space
         log_group = QGroupBox("Registro de Actividad")
         log_layout = QVBoxLayout(log_group)
         
@@ -214,7 +192,6 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(group)
         layout.setSpacing(8)
         
-        # Port selection row
         port_layout = QHBoxLayout()
         port_layout.addWidget(QLabel("Puerto:"))
         self.port_combo = QComboBox()
@@ -229,7 +206,6 @@ class MainWindow(QMainWindow):
         port_layout.addWidget(self.refresh_button)
         layout.addLayout(port_layout)
         
-        # Baud rate row
         baud_layout = QHBoxLayout()
         baud_layout.addWidget(QLabel("Velocidad:"))
         self.baud_combo = QComboBox()
@@ -238,7 +214,6 @@ class MainWindow(QMainWindow):
         baud_layout.addWidget(self.baud_combo, 1)
         layout.addLayout(baud_layout)
         
-        # Connection button
         self.connect_button = QPushButton("Conectar")
         self.connect_button.setMinimumHeight(30)
         layout.addWidget(self.connect_button)
@@ -252,7 +227,6 @@ class MainWindow(QMainWindow):
         
         self.lighting_controls = {}
         
-        # Channel names in Spanish
         channel_names = {
             "top": "Superior",
             "bottom": "Inferior", 
@@ -275,7 +249,6 @@ class MainWindow(QMainWindow):
             channel_layout = QVBoxLayout(channel_container)
             channel_layout.setSpacing(4)
             
-            # Channel name and value in one compact line
             header_layout = QHBoxLayout()
             channel_name = channel_names.get(channel, channel.title())
             label = QLabel(channel_name)
@@ -289,7 +262,6 @@ class MainWindow(QMainWindow):
             header_layout.addWidget(value_label)
             channel_layout.addLayout(header_layout)
             
-            # Compact slider
             slider = QSlider(Qt.Horizontal)
             slider.setRange(0, settings.max_lighting_intensity)
             slider.setValue(0)
@@ -310,7 +282,6 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(group)
         layout.setSpacing(8)
         
-        # Compact settings container
         settings_container = QFrame()
         settings_container.setStyleSheet("""
             QFrame {
@@ -323,7 +294,6 @@ class MainWindow(QMainWindow):
         settings_layout = QGridLayout(settings_container)
         settings_layout.setSpacing(6)
         
-        # Make labels smaller
         qty_label = QLabel("Cantidad:")
         qty_label.setStyleSheet("font-size: 8pt;")
         settings_layout.addWidget(qty_label, 0, 0)
@@ -347,7 +317,6 @@ class MainWindow(QMainWindow):
         
         layout.addWidget(settings_container)
         
-        # Action buttons in a compact layout
         buttons_layout = QVBoxLayout()
         buttons_layout.setSpacing(4)
         
@@ -356,7 +325,6 @@ class MainWindow(QMainWindow):
         self.start_photo_button.setMinimumHeight(30)
         buttons_layout.addWidget(self.start_photo_button)
         
-        # LED button with status indicator layout
         led_layout = QHBoxLayout()
         
         self.toggle_led_button = QPushButton("LED de Prueba")
@@ -364,7 +332,6 @@ class MainWindow(QMainWindow):
         self.toggle_led_button.setMinimumHeight(25)
         led_layout.addWidget(self.toggle_led_button)
         
-        # LED status indicator
         self.led_status_label = QLabel("●")
         self.led_status_label.setFixedSize(20, 20)
         self.led_status_label.setAlignment(Qt.AlignCenter)
@@ -387,46 +354,37 @@ class MainWindow(QMainWindow):
         return group
     
     def create_right_panel(self) -> QWidget:
-        """Create right panel with all controls in a compact layout"""
         panel = QWidget()
         main_layout = QHBoxLayout(panel)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(8)
         
-        # Left column
         left_column = QVBoxLayout()
         left_column.setSpacing(6)
         
-        # Connection controls
         connection_group = self.create_connection_group()
         left_column.addWidget(connection_group)
         
-        # Photo controls
         photo_group = self.create_photo_group()
         left_column.addWidget(photo_group)
         
         left_column.addStretch()
         
-        # Right column
         right_column = QVBoxLayout()
         right_column.setSpacing(6)
         
-        # Lighting controls
         lighting_group = self.create_lighting_group()
         right_column.addWidget(lighting_group)
         
-        # Quick controls section
         controls_group = QGroupBox("Controles Rápidos")
         controls_layout = QVBoxLayout(controls_group)
         controls_layout.setSpacing(6)
         
-        # Emergency stop button
         self.emergency_stop_button = QPushButton("PARADA DE EMERGENCIA")
         style_manager.apply_button_style(self.emergency_stop_button, "emergency")
         self.emergency_stop_button.setMinimumHeight(35)
         controls_layout.addWidget(self.emergency_stop_button)
         
-        # Log control buttons in a row
         log_buttons_layout = QHBoxLayout()
         log_buttons_layout.setSpacing(4)
         
@@ -442,7 +400,6 @@ class MainWindow(QMainWindow):
         
         controls_layout.addLayout(log_buttons_layout)
         
-        # System info display
         info_layout = QHBoxLayout()
         info_layout.addWidget(QLabel("Estado:"))
         self.system_info_label = QLabel("Iniciado")
@@ -454,7 +411,6 @@ class MainWindow(QMainWindow):
         right_column.addWidget(controls_group)
         right_column.addStretch()
         
-        # Add columns to main layout
         main_layout.addLayout(left_column)
         main_layout.addLayout(right_column)
         
@@ -476,7 +432,6 @@ class MainWindow(QMainWindow):
         
         self.toggle_led_button.clicked.connect(self.toggle_test_led)
         
-        # Connect emergency stop button
         self.emergency_stop_button.clicked.connect(self.emergency_stop)
         
         self.port_refresh_thread.ports_updated.connect(self.update_port_list)
@@ -488,7 +443,6 @@ class MainWindow(QMainWindow):
         self.refresh_ports()
     
     def apply_styles(self):
-        """Apply the complete stylesheet using the style manager"""
         stylesheet = style_manager.get_combined_stylesheet()
         if stylesheet:
             self.setStyleSheet(stylesheet)
@@ -555,11 +509,9 @@ class MainWindow(QMainWindow):
             self.connect_button.setText("Desconectar")
             style_manager.apply_button_style(self.connect_button, "disconnect")
             
-            # Update header card
             self.connection_card.value_label.setText("Conectado")
             style_manager.apply_card_value_style(self.connection_card.value_label, "connected")
             
-            # Update system info
             self.system_info_label.setText("Conectado")
             style_manager.apply_system_info_style(self.system_info_label, "connected")
             
@@ -573,14 +525,12 @@ class MainWindow(QMainWindow):
             
         else:
             self.connect_button.setText("Conectar")
-            self.connect_button.setObjectName("")  # Reset to default button style
+            self.connect_button.setObjectName("")
             style_manager._refresh_widget_style(self.connect_button)
             
-            # Update header card
             self.connection_card.value_label.setText("Desconectado")
             style_manager.apply_card_value_style(self.connection_card.value_label, "disconnected")
             
-            # Update system info
             self.system_info_label.setText("Desconectado")
             style_manager.apply_system_info_style(self.system_info_label, "disconnected")
     
@@ -608,7 +558,6 @@ class MainWindow(QMainWindow):
         
         if success:
             self.log_message("Secuencia de fotos iniciada")
-            # Update photo count card
             self.photo_card.value_label.setText("En progreso")
             style_manager.apply_card_value_style(self.photo_card.value_label, "progress")
         else:
@@ -624,7 +573,6 @@ class MainWindow(QMainWindow):
         response = self.session_controller.toggle_led()
         
         if response and response.success:
-            # Extract LED state from response data
             led_state = response.data.get('led_state', False) if response.data else False
             self.update_led_status(led_state)
             
@@ -634,9 +582,7 @@ class MainWindow(QMainWindow):
             self.log_message("Error al alternar LED de prueba", error=True)
     
     def update_led_status(self, led_on: bool):
-        """Update the LED status indicator in the UI"""
         if led_on:
-            # Green for LED ON
             self.led_status_label.setStyleSheet("""
                 QLabel {
                     color: #ffffff;
@@ -648,7 +594,6 @@ class MainWindow(QMainWindow):
             """)
             self.led_status_label.setToolTip("LED L encendido")
         else:
-            # Gray for LED OFF
             self.led_status_label.setStyleSheet("""
                 QLabel {
                     color: #666666;
@@ -661,20 +606,16 @@ class MainWindow(QMainWindow):
             self.led_status_label.setToolTip("LED L apagado")
     
     def on_arduino_response(self, response: Response):
-        # Update LED status if present in response
         if response.data and 'led_state' in response.data:
             led_state = response.data['led_state']
             self.update_led_status(led_state)
             
-        # Always log raw data if available for debugging
         if "raw" in response.data:
             raw_data = response.data["raw"]
-            # Show raw data with special formatting
             self.log_message(f"RAW: '{raw_data}' (len={len(raw_data)}, bytes={[ord(c) for c in raw_data[:20]]})", error=True)
         
         if response.success:
             self.log_message(f"Arduino: {response.message}")
-            # Update Arduino status card
             self.arduino_card.value_label.setText("Operativo")
             style_manager.apply_card_value_style(self.arduino_card.value_label, "operational")
         else:
@@ -708,7 +649,6 @@ class MainWindow(QMainWindow):
         event.accept()
     
     def update_photo_count(self, count: int):
-        """Update the photo count in the header card"""
         self.photo_card.value_label.setText(str(count))
         if count > 0:
             style_manager.apply_card_value_style(self.photo_card.value_label, "default")
@@ -716,11 +656,9 @@ class MainWindow(QMainWindow):
             style_manager.apply_card_value_style(self.photo_card.value_label, "inactive")
     
     def emergency_stop(self):
-        """Emergency stop function"""
         if self.session_controller.is_connected:
             self.session_controller.disconnect()
         
-        # Reset all lighting
         for channel, controls in self.lighting_controls.items():
             controls["slider"].setValue(0)
             controls["value_label"].setText("0")
@@ -730,12 +668,10 @@ class MainWindow(QMainWindow):
         style_manager.apply_system_info_style(self.system_info_label, "emergency")
     
     def clear_log(self):
-        """Clear the activity log"""
         self.log_text.clear()
         self.log_message("Registro de actividad limpiado")
     
     def save_log(self):
-        """Save the activity log to a file"""
         from datetime import datetime
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

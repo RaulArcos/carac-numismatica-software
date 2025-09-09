@@ -1,7 +1,3 @@
-"""
-Style management for CARAC UCA interface.
-Centralizes all styling operations and provides clean API for UI updates.
-"""
 
 from pathlib import Path
 from typing import Dict, Optional
@@ -9,7 +5,6 @@ from loguru import logger
 
 
 class StyleManager:
-    """Manages all styling for the CARAC interface"""
     
     def __init__(self):
         self.qss_path = Path(__file__).parent / "qss"
@@ -17,7 +12,6 @@ class StyleManager:
         self._load_all_styles()
     
     def _load_all_styles(self):
-        """Load all QSS files into memory"""
         qss_files = [
             "uca_theme.qss",
             "status_styles.qss", 
@@ -41,11 +35,9 @@ class StyleManager:
         self._loaded_styles["combined"] = "\n".join(combined_styles)
     
     def get_combined_stylesheet(self) -> str:
-        """Get the complete combined stylesheet"""
         return self._loaded_styles.get("combined", "")
     
     def apply_status_style(self, widget, status: str):
-        """Apply status-based styling to a widget"""
         status_map = {
             "connected": "statusConnected",
             "disconnected": "statusDisconnected", 
@@ -59,7 +51,6 @@ class StyleManager:
             self._refresh_widget_style(widget)
     
     def apply_system_info_style(self, widget, state: str):
-        """Apply system info styling"""
         state_map = {
             "normal": "systemInfoNormal",
             "connected": "systemInfoConnected",
@@ -73,7 +64,6 @@ class StyleManager:
             self._refresh_widget_style(widget)
     
     def apply_card_value_style(self, widget, state: str):
-        """Apply status card value styling"""
         state_map = {
             "connected": "cardValueConnected",
             "disconnected": "cardValueDisconnected",
@@ -90,7 +80,6 @@ class StyleManager:
             self._refresh_widget_style(widget)
     
     def apply_button_style(self, widget, button_type: str):
-        """Apply button styling"""
         button_map = {
             "disconnect": "disconnectButton",
             "emergency": "emergencyButton", 
@@ -105,12 +94,10 @@ class StyleManager:
             self._refresh_widget_style(widget)
     
     def set_card_title_style(self, widget):
-        """Apply card title styling"""
         widget.setObjectName("cardTitle")
         self._refresh_widget_style(widget)
     
     def _refresh_widget_style(self, widget):
-        """Force widget to refresh its styling"""
         widget.style().unpolish(widget)
         widget.style().polish(widget)
         widget.update()

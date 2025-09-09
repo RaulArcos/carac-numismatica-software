@@ -26,7 +26,6 @@ class Command(BaseModel):
     
     def to_serial(self) -> str:
         import json
-        # Remove None/null values to avoid Arduino JSON parsing issues
         data = {k: v for k, v in self.model_dump().items() if v is not None}
         return json.dumps(data) + "\n"
 
@@ -64,7 +63,6 @@ class LightingCommand(Command):
     intensity: int = Field(..., ge=0, le=255, description="Lighting intensity (0-255)")
     
     def __init__(self, **data):
-        # Don't pass channel and intensity to parent to avoid duplication
         command_data = {k: v for k, v in data.items() if k not in ['channel', 'intensity']}
         super().__init__(**command_data)
         self.channel = data['channel']
@@ -76,7 +74,6 @@ class LightingCommand(Command):
     
     def to_serial(self) -> str:
         import json
-        # Only include type and data to avoid field duplication
         serialized_data = {
             "type": self.type,
             "data": self.data
@@ -92,7 +89,6 @@ class PhotoSequenceCommand(Command):
     delay: float = Field(default=1.0, ge=0.1, le=10.0, description="Delay between photos")
     
     def __init__(self, **data):
-        # Don't pass count and delay to parent to avoid duplication
         command_data = {k: v for k, v in data.items() if k not in ['count', 'delay']}
         super().__init__(**command_data)
         self.count = data.get('count', 5)
@@ -104,7 +100,6 @@ class PhotoSequenceCommand(Command):
     
     def to_serial(self) -> str:
         import json
-        # Only include type and data to avoid field duplication
         serialized_data = {
             "type": self.type,
             "data": self.data
