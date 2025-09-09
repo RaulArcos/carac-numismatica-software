@@ -1,0 +1,87 @@
+/* Button styling for CARAC UCA interface */
+
+/* Disconnect Button */
+QPushButton#disconnectButton {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #dc3545, stop: 1 #bd2130);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-weight: 600;
+    font-size: 9pt;
+    min-height: 20px;
+}
+
+QPushButton#disconnectButton:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #e55353, stop: 1 #dc3545);
+}
+
+/* Emergency Stop Button */
+QPushButton#emergencyButton {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #dc3545, stop: 1 #bd2130);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 15px 25px;
+    font-weight: 700;
+    font-size: 11pt;
+    min-height: 25px;
+}
+
+QPushButton#emergencyButton:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #e55353, stop: 1 #dc3545);
+}
+
+/* Start Photo Button */
+QPushButton#startButton {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #28a745, stop: 1 #1e7e34);
+    color: white;
+    font-weight: 700;
+    padding: 15px 25px;
+    min-height: 25px;
+    border: none;
+    border-radius: 8px;
+}
+
+QPushButton#startButton:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #34ce57, stop: 1 #28a745);
+}
+
+/* Warning/Test Button */
+QPushButton#warningButton {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #DD7500, stop: 1 #b85d00);
+    color: white;
+    font-weight: 700;
+    border: none;
+    border-radius: 8px;
+}
+
+QPushButton#warningButton:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #ff8c1a, stop: 1 #DD7500);
+}
+
+/* Secondary Button */
+QPushButton#secondaryButton {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #8C8984, stop: 1 #6c6c6c);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-weight: 600;
+    font-size: 9pt;
+    min-height: 20px;
+}
+
+QPushButton#secondaryButton:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #a0a0a0, stop: 1 #808080);
+}

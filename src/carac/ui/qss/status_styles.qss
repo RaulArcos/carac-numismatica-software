@@ -1,0 +1,141 @@
+/* Status-related styling for CARAC UCA interface */
+
+/* Connection Status Labels */
+QLabel#statusConnected {
+    color: #28a745;
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    font-weight: 600;
+    font-size: 10pt;
+    padding: 8px 12px;
+    border-radius: 6px;
+}
+
+QLabel#statusDisconnected {
+    color: #dc3545;
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    font-weight: 600;
+    font-size: 10pt;
+    padding: 8px 12px;
+    border-radius: 6px;
+}
+
+QLabel#statusConnecting {
+    color: #DD7500;
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    font-weight: 600;
+    font-size: 10pt;
+    padding: 8px 12px;
+    border-radius: 6px;
+}
+
+QLabel#statusError {
+    color: #dc3545;
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    font-weight: 600;
+    font-size: 10pt;
+    padding: 8px 12px;
+    border-radius: 6px;
+}
+
+/* System Info Labels */
+QLabel#systemInfoNormal {
+    color: #00607C;
+    font-weight: 600;
+    padding: 5px 10px;
+    background: #e3f2fd;
+    border-radius: 4px;
+}
+
+QLabel#systemInfoConnected {
+    color: #28a745;
+    font-weight: 600;
+    padding: 5px 10px;
+    background: #d4edda;
+    border-radius: 4px;
+}
+
+QLabel#systemInfoDisconnected {
+    color: #dc3545;
+    font-weight: 600;
+    padding: 5px 10px;
+    background: #f8d7da;
+    border-radius: 4px;
+}
+
+QLabel#systemInfoEmergency {
+    color: #dc3545;
+    font-weight: 600;
+    padding: 5px 10px;
+    background: #f8d7da;
+    border-radius: 4px;
+}
+
+/* Status Card Value Labels */
+QLabel#cardValueConnected {
+    color: #28a745; 
+    font-size: 18pt; 
+    font-weight: 700;
+    background: transparent;
+    border: none;
+}
+
+QLabel#cardValueDisconnected {
+    color: #dc3545; 
+    font-size: 18pt; 
+    font-weight: 700;
+    background: transparent;
+    border: none;
+}
+
+QLabel#cardValueConnecting {
+    color: #DD7500; 
+    font-size: 18pt; 
+    font-weight: 700;
+    background: transparent;
+    border: none;
+}
+
+QLabel#cardValueOperational {
+    color: #28a745; 
+    font-size: 18pt; 
+    font-weight: 700;
+    background: transparent;
+    border: none;
+}
+
+QLabel#cardValueProgress {
+    color: #DD7500; 
+    font-size: 18pt; 
+    font-weight: 700;
+    background: transparent;
+    border: none;
+}
+
+QLabel#cardValueDefault {
+    color: #00607C; 
+    font-size: 18pt; 
+    font-weight: 700;
+    background: transparent;
+    border: none;
+}
+
+QLabel#cardValueInactive {
+    color: #8C8984; 
+    font-size: 18pt; 
+    font-weight: 700;
+    background: transparent;
+    border: none;
+}
+
+/* Card Titles */
+QLabel#cardTitle {
+    color: #8C8984; 
+    font-size: 10pt; 
+    font-weight: 500;
+    background: transparent;
+    border: none;
+}
