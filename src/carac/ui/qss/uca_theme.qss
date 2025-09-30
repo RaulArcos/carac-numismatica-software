@@ -52,7 +52,6 @@ QPushButton {
 QPushButton:hover {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
                                 stop: 0 #0072a3, stop: 1 #005580);
-    transform: translateY(-1px);
 }
 
 QPushButton:pressed {
@@ -80,7 +79,7 @@ QPushButton#secondaryButton:hover {
 /* Action Buttons */
 QPushButton#startButton {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #28a745, stop: 1 #1e7e34);
+                                stop: 0 #00607C, stop: 1 #004a63);
     color: white;
     font-weight: 700;
     padding: 15px 25px;
@@ -89,7 +88,7 @@ QPushButton#startButton {
 
 QPushButton#startButton:hover {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #34ce57, stop: 1 #28a745);
+                                stop: 0 #0072a3, stop: 1 #005580);
 }
 
 QPushButton#warningButton {
@@ -106,13 +105,13 @@ QPushButton#warningButton:hover {
 
 QPushButton#disconnectButton {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #dc3545, stop: 1 #bd2130);
+                                stop: 0 #DD7500, stop: 1 #b85d00);
     color: white;
 }
 
 QPushButton#disconnectButton:hover {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #e55353, stop: 1 #dc3545);
+                                stop: 0 #ff8c1a, stop: 1 #DD7500);
 }
 
 /* Combo Boxes */
@@ -136,11 +135,11 @@ QComboBox::drop-down {
 }
 
 QComboBox::down-arrow {
-    image: none;
+    width: 0;
+    height: 0;
     border-left: 5px solid transparent;
     border-right: 5px solid transparent;
-    border-top: 5px solid #8C8984;
-    margin-right: 5px;
+    border-top: 6px solid #00607C;
 }
 
 QComboBox QAbstractItemView {
@@ -177,11 +176,11 @@ QSlider::groove:horizontal {
 QSlider::handle:horizontal {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
                                 stop: 0 #00607C, stop: 1 #004a63);
-    border: 1px solid white;
-    width: 16px;
-    height: 16px;
-    border-radius: 10px;
-    margin: -6px 0;
+    border: 2px solid white;
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    margin: -7px 0;
 }
 
 QSlider::handle:horizontal:hover {
@@ -285,15 +284,15 @@ QLabel#statusLabel {
 }
 
 QLabel#statusConnected {
-    color: #28a745;
-    background: #d4edda;
-    border: 1px solid #c3e6cb;
+    color: #00607C;
+    background: #e3f2fd;
+    border: 1px solid #b3d9f2;
 }
 
 QLabel#statusDisconnected {
-    color: #dc3545;
-    background: #f8d7da;
-    border: 1px solid #f5c6cb;
+    color: #8C8984;
+    background: #f5f5f5;
+    border: 1px solid #e0e0e0;
 }
 
 QLabel#statusConnecting {
@@ -303,9 +302,9 @@ QLabel#statusConnecting {
 }
 
 QLabel#statusError {
-    color: #dc3545;
-    background: #f8d7da;
-    border: 1px solid #f5c6cb;
+    color: #DD7500;
+    background: #fff3cd;
+    border: 1px solid #ffe69c;
 }
 
 /* Text Edits */
@@ -373,4 +372,136 @@ QToolTip {
     border-radius: 4px;
     padding: 6px 8px;
     font-size: 8pt;
+}
+
+/* Connection Panel */
+QFrame#connectionPanel {
+    background-color: white;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 8px;
+}
+
+QPushButton#refreshButton {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #8C8984, stop: 1 #6c6c6c);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px;
+    font-weight: 600;
+    font-size: 14pt;
+    min-height: 20px;
+}
+
+QPushButton#refreshButton:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #a0a0a0, stop: 1 #808080);
+}
+
+/* Status Card */
+QFrame#statusCard {
+    background-color: white;
+    border: none;
+    border-radius: 8px;
+    margin: 2px;
+}
+
+/* Lighting Control Frame */
+QFrame#lightingControlFrame {
+    background: #f8f9fa;
+    border-radius: 4px;
+    padding: 4px;
+    margin: 1px;
+}
+
+QLabel#ringNameLabel {
+    font-weight: 600;
+    color: #00607C;
+    font-size: 8pt;
+}
+
+QLabel#ringValueLabel {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 9pt;
+}
+
+QLabel#ringIndicator {
+    background: #00607C;
+    color: white;
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-weight: bold;
+    font-size: 8pt;
+    min-width: 28px;
+    max-width: 32px;
+}
+
+QLineEdit#normalizedInput {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 8pt;
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 2px 4px;
+}
+
+QLineEdit#normalizedInput:focus {
+    border: 2px solid #00607C;
+}
+
+/* Preset Panel Labels */
+QLabel#customPresetsLabel {
+    font-weight: 600;
+    color: #00607C;
+    font-size: 9pt;
+    margin-top: 4px;
+}
+
+QPushButton#savePresetButton {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #DD7500, stop: 1 #b85d00);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 4px;
+}
+
+QPushButton#savePresetButton:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #ff8c1a, stop: 1 #DD7500);
+}
+
+QPushButton#savePresetButton:pressed {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #b85d00, stop: 1 #995000);
+}
+
+/* Photo Control Panel */
+QLabel#sectionLabel {
+    font-weight: 600;
+    color: #00607C;
+    font-size: 9pt;
+}
+
+QFrame#separator {
+    background: #e9ecef;
+}
+
+QLabel#ledStatusOff {
+    color: #8C8984;
+    font-size: 16px;
+    font-weight: bold;
+    border-radius: 10px;
+    background-color: #f0f0f0;
+}
+
+QLabel#ledStatusOn {
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: bold;
+    border-radius: 10px;
+    background-color: #DD7500;
 }

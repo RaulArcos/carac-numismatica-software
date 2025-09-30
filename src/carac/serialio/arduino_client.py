@@ -1,7 +1,6 @@
 import time
-from typing import Optional, Callable
+from typing import Callable
 from threading import Thread, Lock, Event
-from queue import Queue, Empty
 
 import serial
 from loguru import logger
@@ -13,106 +12,100 @@ from ..protocol.models import (
     ConnectionStatus,
     PingCommand,
     StatusCommand,
+    LightingCommand,
+    PhotoSequenceCommand,
+    LedToggleCommand,
 )
 
 
 class ArduinoClient:
+    DEFAULT_COMMAND_TIMEOUT = 2.0
+    RECONNECT_DELAY = 0.5
+    HANDSHAKE_DELAY = 0.2
+    READ_LOOP_DELAY = 0.01
+    
     def __init__(self) -> None:
-        self.serial: Optional[serial.Serial] = None
-        self.status = ConnectionStatus.DISCONNECTED
-        self.lock = Lock()
-        self._read_thread: Optional[Thread] = None
+        self._serial: serial.Serial | None = None
+        self._status = ConnectionStatus.DISCONNECTED
+        self._lock = Lock()
+        self._read_thread: Thread | None = None
         self._stop_reading = False
-        self._response_callback: Optional[Callable[[Response], None]] = None
-        
-        self._pending_response: Optional[Response] = None
+        self._response_callback: Callable[[Response], None] | None = None
+        self._pending_response: Response | None = None
         self._response_event = Event()
-        self._command_timeout = 2.0
-    def connect(self, port: str, baud_rate: Optional[int] = None) -> bool:
-        if self.status == ConnectionStatus.CONNECTED:
+        self._command_timeout = self.DEFAULT_COMMAND_TIMEOUT
+    
+    def connect(self, port: str, baud_rate: int | None = None) -> bool:
+        if self._status == ConnectionStatus.CONNECTED:
             logger.warning("Already connected to Arduino")
             return True
-            
+        
         baud_rate = baud_rate or settings.default_baud_rate
         
         try:
-            self.status = ConnectionStatus.CONNECTING
+            self._status = ConnectionStatus.CONNECTING
             logger.info(f"Connecting to Arduino on {port} at {baud_rate} baud")
             
-            self.serial = serial.Serial(
+            self._serial = serial.Serial(
                 port=port,
                 baudrate=baud_rate,
                 timeout=settings.default_timeout,
                 write_timeout=settings.default_timeout,
             )
             
-            time.sleep(0.5)
+            time.sleep(self.RECONNECT_DELAY)
             
-            if self.serial.is_open:
-                self.status = ConnectionStatus.CONNECTED
+            if self._serial.is_open:
+                self._status = ConnectionStatus.CONNECTED
                 logger.info("Successfully connected to Arduino")
-                
                 self._start_reading()
-                
-                time.sleep(0.2)
-                
-                logger.info("Connection established, ping will be tested separately")
+                time.sleep(self.HANDSHAKE_DELAY)
                 return True
             else:
-                self.status = ConnectionStatus.ERROR
+                self._status = ConnectionStatus.ERROR
                 logger.error("Failed to open serial connection")
                 return False
                 
         except Exception as e:
-            self.status = ConnectionStatus.ERROR
+            self._status = ConnectionStatus.ERROR
             logger.error(f"Error connecting to Arduino: {e}")
             return False
     
     def disconnect(self) -> None:
-        with self.lock:
-            if self.serial and self.serial.is_open:
+        with self._lock:
+            if self._serial and self._serial.is_open:
                 self._stop_reading = True
-                
-                # Signal any waiting commands to abort
                 self._response_event.set()
                 
                 if self._read_thread and self._read_thread.is_alive():
                     self._read_thread.join(timeout=1.0)
                 
-                self.serial.close()
+                self._serial.close()
                 logger.info("Disconnected from Arduino")
             
-            self.serial = None
-            self.status = ConnectionStatus.DISCONNECTED
-            
-            # Reset response handling state
+            self._serial = None
+            self._status = ConnectionStatus.DISCONNECTED
             self._pending_response = None
             self._response_event.clear()
     
-    def send_command(self, command: Command) -> Optional[Response]:
-        if not self.serial or not self.serial.is_open:
+    def send_command(self, command: Command) -> Response | None:
+        if not self._serial or not self._serial.is_open:
             logger.error("Not connected to Arduino")
             return None
         
         try:
-            with self.lock:
+            with self._lock:
                 self._pending_response = None
                 self._response_event.clear()
-                logger.debug("Cleared pending response and event before sending command")
                 
                 command_data = command.to_serial()
                 logger.info(f"Sending command: {command_data.strip()}")
                 
-                self.serial.write(command_data.encode('utf-8'))
-                self.serial.flush()
-                
-                logger.debug(f"Command sent, waiting for response (timeout: {self._command_timeout}s)")
-                
+                self._serial.write(command_data.encode('utf-8'))
+                self._serial.flush()
             
-            logger.debug(f"Waiting for response event (timeout: {self._command_timeout}s)")
             if self._response_event.wait(timeout=self._command_timeout):
-                with self.lock:
-                    logger.debug("Event triggered, checking for response")
+                with self._lock:
                     response = self._pending_response
                     self._pending_response = None
                     if response:
@@ -123,26 +116,22 @@ class ArduinoClient:
                         return None
             else:
                 logger.warning("No response received from Arduino within timeout")
-                with self.lock:
-                    logger.debug(f"Final event state: {self._response_event.is_set()}, pending: {self._pending_response}")
-                    return None
+                return None
                     
         except Exception as e:
             logger.error(f"Error sending command: {e}")
             return None
     
     def ping(self) -> bool:
-        command = PingCommand()
-        response = self.send_command(command)
+        response = self.send_command(PingCommand())
         return response is not None and response.success
     
     def test_communication(self) -> bool:
         if not self.is_connected:
             logger.warning("Cannot test communication - not connected")
             return False
-            
-        logger.info("Testing Arduino communication...")
         
+        logger.info("Testing Arduino communication...")
         original_timeout = self._command_timeout
         self._command_timeout = 5.0
         
@@ -156,27 +145,17 @@ class ArduinoClient:
         finally:
             self._command_timeout = original_timeout
     
-    def get_status(self) -> Optional[Response]:
-        command = StatusCommand()
-        return self.send_command(command)
+    def get_status(self) -> Response | None:
+        return self.send_command(StatusCommand())
     
-    def set_lighting(self, channel: str, intensity: int) -> Optional[Response]:
-        from ..protocol.models import LightingCommand
-        
-        command = LightingCommand(channel=channel, intensity=intensity)
-        return self.send_command(command)
+    def set_lighting(self, channel: str, intensity: int) -> Response | None:
+        return self.send_command(LightingCommand(channel=channel, intensity=intensity))
     
-    def start_photo_sequence(self, count: int = 5, delay: float = 1.0) -> Optional[Response]:
-        from ..protocol.models import PhotoSequenceCommand
-        
-        command = PhotoSequenceCommand(count=count, delay=delay)
-        return self.send_command(command)
+    def start_photo_sequence(self, count: int = 5, delay: float = 1.0) -> Response | None:
+        return self.send_command(PhotoSequenceCommand(count=count, delay=delay))
     
-    def toggle_led(self) -> Optional[Response]:
-        from ..protocol.models import LedToggleCommand
-        
-        command = LedToggleCommand()
-        return self.send_command(command)
+    def toggle_led(self) -> Response | None:
+        return self.send_command(LedToggleCommand())
     
     def set_response_callback(self, callback: Callable[[Response], None]) -> None:
         self._response_callback = callback
@@ -187,10 +166,10 @@ class ArduinoClient:
         self._read_thread.start()
     
     def _read_loop(self) -> None:
-        while not self._stop_reading and self.serial and self.serial.is_open:
+        while not self._stop_reading and self._serial and self._serial.is_open:
             try:
-                if self.serial.in_waiting > 0:
-                    data = self.serial.readline().decode('utf-8').strip()
+                if self._serial.in_waiting > 0:
+                    data = self._serial.readline().decode('utf-8').strip()
                     if data:
                         logger.info(f"RAW Arduino response: {repr(data)}")
                         
@@ -200,10 +179,9 @@ class ArduinoClient:
                         
                         response = Response.from_serial(data)
                         logger.debug(f"Parsed response: {response}")
-                        
                         self._route_response(response)
                 
-                time.sleep(0.01)
+                time.sleep(self.READ_LOOP_DELAY)
                 
             except Exception as e:
                 logger.error(f"Error in read loop: {e}")
@@ -212,18 +190,11 @@ class ArduinoClient:
         logger.debug("Read loop stopped")
     
     def _route_response(self, response: Response) -> None:
-        with self.lock:
-            event_is_set = self._response_event.is_set()
-            has_pending_response = self._pending_response is not None
-            
-            logger.debug(f"Routing response - event_set: {event_is_set}, has_pending: {has_pending_response}, response: {response}")
-            
-            if not event_is_set and not has_pending_response:
+        with self._lock:
+            if not self._response_event.is_set() and self._pending_response is None:
                 self._pending_response = response
-                logger.debug(f"Setting pending response: {response}")
                 self._response_event.set()
                 logger.info("Response routed to synchronous command")
-                logger.debug(f"Event set, event_is_set now: {self._response_event.is_set()}")
                 return
         
         logger.info("Response routed to async callback")
@@ -232,19 +203,21 @@ class ArduinoClient:
                 self._response_callback(response)
             except Exception as e:
                 logger.error(f"Error in async response callback: {e}")
-        else:
-            logger.debug("No async callback registered, response discarded")
     
     @property
     def is_connected(self) -> bool:
         return (
-            self.status == ConnectionStatus.CONNECTED and
-            self.serial is not None and
-            self.serial.is_open
+            self._status == ConnectionStatus.CONNECTED and
+            self._serial is not None and
+            self._serial.is_open
         )
     
-    def __enter__(self):
+    @property
+    def status(self) -> ConnectionStatus:
+        return self._status
+    
+    def __enter__(self) -> "ArduinoClient":
         return self
     
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.disconnect()

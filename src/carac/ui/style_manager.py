@@ -1,27 +1,26 @@
-
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
+
 from loguru import logger
 
 
 class StyleManager:
+    QSS_FILES = [
+        "uca_theme.qss",
+        "status_styles.qss",
+        "button_styles.qss",
+    ]
     
-    def __init__(self):
-        self.qss_path = Path(__file__).parent / "qss"
+    def __init__(self) -> None:
+        self._qss_path = Path(__file__).parent / "qss"
         self._loaded_styles: Dict[str, str] = {}
         self._load_all_styles()
     
-    def _load_all_styles(self):
-        qss_files = [
-            "uca_theme.qss",
-            "status_styles.qss", 
-            "button_styles.qss"
-        ]
-        
+    def _load_all_styles(self) -> None:
         combined_styles = []
         
-        for qss_file in qss_files:
-            qss_file_path = self.qss_path / qss_file
+        for qss_file in self.QSS_FILES:
+            qss_file_path = self._qss_path / qss_file
             try:
                 with open(qss_file_path, 'r', encoding='utf-8') as f:
                     content = f.read()
@@ -37,10 +36,10 @@ class StyleManager:
     def get_combined_stylesheet(self) -> str:
         return self._loaded_styles.get("combined", "")
     
-    def apply_status_style(self, widget, status: str):
+    def apply_status_style(self, widget, status: str) -> None:
         status_map = {
             "connected": "statusConnected",
-            "disconnected": "statusDisconnected", 
+            "disconnected": "statusDisconnected",
             "connecting": "statusConnecting",
             "error": "statusError"
         }
@@ -50,7 +49,7 @@ class StyleManager:
             widget.setObjectName(object_name)
             self._refresh_widget_style(widget)
     
-    def apply_system_info_style(self, widget, state: str):
+    def apply_system_info_style(self, widget, state: str) -> None:
         state_map = {
             "normal": "systemInfoNormal",
             "connected": "systemInfoConnected",
@@ -63,11 +62,11 @@ class StyleManager:
             widget.setObjectName(object_name)
             self._refresh_widget_style(widget)
     
-    def apply_card_value_style(self, widget, state: str):
+    def apply_card_value_style(self, widget, state: str) -> None:
         state_map = {
             "connected": "cardValueConnected",
             "disconnected": "cardValueDisconnected",
-            "connecting": "cardValueConnecting", 
+            "connecting": "cardValueConnecting",
             "operational": "cardValueOperational",
             "progress": "cardValueProgress",
             "default": "cardValueDefault",
@@ -79,13 +78,14 @@ class StyleManager:
             widget.setObjectName(object_name)
             self._refresh_widget_style(widget)
     
-    def apply_button_style(self, widget, button_type: str):
+    def apply_button_style(self, widget, button_type: str) -> None:
         button_map = {
             "disconnect": "disconnectButton",
-            "emergency": "emergencyButton", 
+            "emergency": "emergencyButton",
             "start": "startButton",
             "warning": "warningButton",
-            "secondary": "secondaryButton"
+            "secondary": "secondaryButton",
+            "preset_selected": "presetSelectedButton"
         }
         
         object_name = button_map.get(button_type.lower())
@@ -93,15 +93,14 @@ class StyleManager:
             widget.setObjectName(object_name)
             self._refresh_widget_style(widget)
     
-    def set_card_title_style(self, widget):
+    def set_card_title_style(self, widget) -> None:
         widget.setObjectName("cardTitle")
         self._refresh_widget_style(widget)
     
-    def _refresh_widget_style(self, widget):
+    def _refresh_widget_style(self, widget) -> None:
         widget.style().unpolish(widget)
         widget.style().polish(widget)
         widget.update()
 
 
-# Global style manager instance
 style_manager = StyleManager()

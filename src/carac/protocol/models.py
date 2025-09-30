@@ -1,5 +1,6 @@
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict
+import json
 
 from pydantic import BaseModel, Field
 
@@ -22,23 +23,26 @@ class ConnectionStatus(str, Enum):
 class Command(BaseModel):
     type: CommandType
     data: Dict[str, Any] = Field(default_factory=dict)
-    timestamp: Optional[float] = None
+    timestamp: float | None = None
     
     def to_serial(self) -> str:
-        import json
-        data = {k: v for k, v in self.model_dump().items() if v is not None}
-        return json.dumps(data) + "\n"
+        payload = {
+            "type": self.type.value,
+            "data": self.data,
+        }
+        if self.timestamp is not None:
+            payload["timestamp"] = self.timestamp
+        return json.dumps(payload) + "\n"
 
 
 class Response(BaseModel):
     success: bool
     message: str
     data: Dict[str, Any] = Field(default_factory=dict)
-    timestamp: Optional[float] = None
+    timestamp: float | None = None
     
     @classmethod
     def from_serial(cls, data: str) -> "Response":
-        import json
         try:
             if not data or not data.strip():
                 return cls(
@@ -58,76 +62,55 @@ class Response(BaseModel):
 
 
 class LightingCommand(Command):
-    type: CommandType = Field(default=CommandType.LIGHTING, frozen=True)
-    channel: str = Field(..., description="Lighting channel name")
-    intensity: int = Field(..., ge=0, le=255, description="Lighting intensity (0-255)")
+    type: CommandType = Field(default=CommandType.LIGHTING, init=False)
     
-    def __init__(self, **data):
-        command_data = {k: v for k, v in data.items() if k not in ['channel', 'intensity']}
-        super().__init__(**command_data)
-        self.channel = data['channel']
-        self.intensity = data['intensity']
-        self.data = {
-            "channel": self.channel,
-            "intensity": self.intensity
-        }
-    
-    def to_serial(self) -> str:
-        import json
-        serialized_data = {
-            "type": self.type,
-            "data": self.data
-        }
-        if self.timestamp is not None:
-            serialized_data["timestamp"] = self.timestamp
-        return json.dumps(serialized_data) + "\n"
+    def __init__(self, channel: str, intensity: int, **kwargs: Any) -> None:
+        super().__init__(
+            type=CommandType.LIGHTING,
+            data={"channel": channel, "intensity": intensity},
+            **kwargs
+        )
 
 
 class PhotoSequenceCommand(Command):
-    type: CommandType = Field(default=CommandType.PHOTO_SEQUENCE, frozen=True)
-    count: int = Field(default=5, ge=1, le=100, description="Number of photos to take")
-    delay: float = Field(default=1.0, ge=0.1, le=10.0, description="Delay between photos")
+    type: CommandType = Field(default=CommandType.PHOTO_SEQUENCE, init=False)
     
-    def __init__(self, **data):
-        command_data = {k: v for k, v in data.items() if k not in ['count', 'delay']}
-        super().__init__(**command_data)
-        self.count = data.get('count', 5)
-        self.delay = data.get('delay', 1.0)
-        self.data = {
-            "count": self.count,
-            "delay": self.delay
-        }
-    
-    def to_serial(self) -> str:
-        import json
-        serialized_data = {
-            "type": self.type,
-            "data": self.data
-        }
-        if self.timestamp is not None:
-            serialized_data["timestamp"] = self.timestamp
-        return json.dumps(serialized_data) + "\n"
+    def __init__(self, count: int = 5, delay: float = 1.0, **kwargs: Any) -> None:
+        super().__init__(
+            type=CommandType.PHOTO_SEQUENCE,
+            data={"count": count, "delay": delay},
+            **kwargs
+        )
 
 
 class PingCommand(Command):
-    type: CommandType = Field(default=CommandType.PING, frozen=True)
+    type: CommandType = Field(default=CommandType.PING, init=False)
     
-    def __init__(self, **data):
-        super().__init__(**data)
-        self.data = {"ping": True}
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(
+            type=CommandType.PING,
+            data={"ping": True},
+            **kwargs
+        )
 
 
 class StatusCommand(Command):
-    type: CommandType = Field(default=CommandType.STATUS, frozen=True)
+    type: CommandType = Field(default=CommandType.STATUS, init=False)
     
-    def __init__(self, **data):
-        super().__init__(**data)
-        self.data = {"status": True}
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(
+            type=CommandType.STATUS,
+            data={"status": True},
+            **kwargs
+        )
 
 
 class LedToggleCommand(Command):
-    type: CommandType = Field(default=CommandType.LED_TOGGLE, frozen=True)
+    type: CommandType = Field(default=CommandType.LED_TOGGLE, init=False)
     
-    def __init__(self, **data):
-        super().__init__(**data)
-        self.data = {"toggle": True}
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(
+            type=CommandType.LED_TOGGLE,
+            data={"toggle": True},
+            **kwargs
+        )

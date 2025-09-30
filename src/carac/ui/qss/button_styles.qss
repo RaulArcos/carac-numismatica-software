@@ -3,7 +3,7 @@
 /* Disconnect Button */
 QPushButton#disconnectButton {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #dc3545, stop: 1 #bd2130);
+                                stop: 0 #DD7500, stop: 1 #b85d00);
     color: white;
     border: none;
     border-radius: 8px;
@@ -15,13 +15,13 @@ QPushButton#disconnectButton {
 
 QPushButton#disconnectButton:hover {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #e55353, stop: 1 #dc3545);
+                                stop: 0 #ff8c1a, stop: 1 #DD7500);
 }
 
 /* Emergency Stop Button */
 QPushButton#emergencyButton {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #dc3545, stop: 1 #bd2130);
+                                stop: 0 #DD7500, stop: 1 #b85d00);
     color: white;
     border: none;
     border-radius: 8px;
@@ -33,13 +33,13 @@ QPushButton#emergencyButton {
 
 QPushButton#emergencyButton:hover {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #e55353, stop: 1 #dc3545);
+                                stop: 0 #ff8c1a, stop: 1 #DD7500);
 }
 
 /* Start Photo Button */
 QPushButton#startButton {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #28a745, stop: 1 #1e7e34);
+                                stop: 0 #00607C, stop: 1 #004a63);
     color: white;
     font-weight: 700;
     padding: 15px 25px;
@@ -50,7 +50,7 @@ QPushButton#startButton {
 
 QPushButton#startButton:hover {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #34ce57, stop: 1 #28a745);
+                                stop: 0 #0072a3, stop: 1 #005580);
 }
 
 /* Warning/Test Button */
@@ -84,4 +84,32 @@ QPushButton#secondaryButton {
 QPushButton#secondaryButton:hover {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
                                 stop: 0 #a0a0a0, stop: 1 #808080);
+}
+
+QPushButton#secondaryButton:pressed {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #6c6c6c, stop: 1 #5c5c5c);
+}
+
+/* Preset Selected Button */
+QPushButton#presetSelectedButton {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #00607C, stop: 1 #004a63);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-weight: 600;
+    font-size: 9pt;
+    min-height: 20px;
+}
+
+QPushButton#presetSelectedButton:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #0072a3, stop: 1 #005580);
+}
+
+QPushButton#presetSelectedButton:pressed {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #004a63, stop: 1 #003850);
 }

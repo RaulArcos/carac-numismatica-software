@@ -1,81 +1,80 @@
-from typing import Optional
 from pathlib import Path
+
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QGridLayout,
     QLabel,
-    QPushButton,
-    QComboBox,
-    QSlider,
-    QGroupBox,
-    QTextEdit,
-    QSpinBox,
-    QDoubleSpinBox,
     QMessageBox,
-    QFrame,
-    QFileDialog,
-    QSizePolicy,
 )
-from PySide6.QtCore import Qt, QTimer, Signal, QThread
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QIcon
 
 from loguru import logger
 
 from ..config.settings import settings
 from ..controllers.session_controller import SessionController
-from ..serialio.ports import get_available_ports, get_arduino_ports
 from ..protocol.models import ConnectionStatus, Response
 from .style_manager import style_manager
-
-
-class PortRefreshThread(QThread):
-    ports_updated = Signal(list)
-    
-    def run(self):
-        ports = get_available_ports()
-        self.ports_updated.emit(ports)
+from .widgets import (
+    StatusCard,
+    ConnectionPanel,
+    LightingControlPanel,
+    PresetControlPanel,
+    PhotoControlPanel,
+    LogPanel,
+)
+from .services import PresetService, PortService
+from .services.port_service import PortRefreshThread
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    WINDOW_TITLE = "CARAC - Control Numismático UCA"
+    WINDOW_ORGANIZATION = "Universidad de Cádiz"
+    WINDOW_WIDTH = 1200
+    WINDOW_HEIGHT = 750
+    MIN_WIDTH = 1100
+    MIN_HEIGHT = 700
+    PORT_REFRESH_INTERVAL = 5000
+    
+    def __init__(self) -> None:
         super().__init__()
         
-        self.session_controller = SessionController()
-        self.port_refresh_timer = QTimer()
-        self.port_refresh_thread = PortRefreshThread()
+        self._session_controller = SessionController()
+        self._port_refresh_timer = QTimer()
+        self._port_refresh_thread = PortRefreshThread()
         
-        self.setup_ui()
-        self.setup_connections()
-        self.setup_timers()
-        
-        self.session_controller.add_status_callback(self.on_connection_status_changed)
-        self.session_controller.add_response_callback(self.on_arduino_response)
+        self._setup_window()
+        self._setup_ui()
+        self._setup_connections()
+        self._setup_session_callbacks()
+        self._start_port_refresh()
+        self._apply_styles()
         
         logger.info("Main window initialized")
     
-    def setup_ui(self):
-        self.setWindowTitle("CARAC - Control Numismático UCA")
-        
-        possible_icon_paths = [
-            Path(__file__).parent.parent.parent.parent / "assets" / "ui" / "logo.png",
+    def _setup_window(self) -> None:
+        self.setWindowTitle(self.WINDOW_TITLE)
+        self.setGeometry(100, 100, self.WINDOW_WIDTH, self.WINDOW_HEIGHT)
+        self.setMinimumSize(self.MIN_WIDTH, self.MIN_HEIGHT)
+        self._load_window_icon()
+    
+    def _load_window_icon(self) -> None:
+        icon_paths = [
+            Path(__file__).parent.parent.parent / "assets" / "ui" / "logo.png",
             Path.cwd() / "assets" / "ui" / "logo.png",
-            Path(__file__).parent / "assets" / "ui" / "logo.png",
         ]
         
-        for icon_path in possible_icon_paths:
+        for icon_path in icon_paths:
             if icon_path.exists():
                 self.setWindowIcon(QIcon(str(icon_path)))
                 logger.info(f"Application icon loaded from: {icon_path}")
-                break
-        else:
-            logger.warning("Application icon not found")
+                return
         
-        self.setGeometry(100, 100, 1000, 700)
-        self.setMinimumSize(900, 600)
-        
+        logger.warning("Application icon not found")
+    
+    def _setup_ui(self) -> None:
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
@@ -83,613 +82,278 @@ class MainWindow(QMainWindow):
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
         
-        header = self.create_header()
-        main_layout.addWidget(header)
-        
-        content_layout = QHBoxLayout()
-        content_layout.setSpacing(10)
-        
-        left_panel = self.create_left_panel()
-        content_layout.addWidget(left_panel, 1)
-        
-        right_panel = self.create_right_panel()
-        content_layout.addWidget(right_panel, 2)
-        
-        main_layout.addLayout(content_layout, 1)
-        
-        self.apply_styles()
+        main_layout.addWidget(self._create_header())
+        main_layout.addLayout(self._create_content_layout(), 1)
     
-    def create_header(self) -> QWidget:
+    def _create_header(self) -> QWidget:
         header_widget = QWidget()
-        header_layout = QVBoxLayout(header_widget)
+        header_layout = QHBoxLayout(header_widget)
         header_layout.setContentsMargins(0, 0, 0, 0)
-        header_layout.setSpacing(8)
+        header_layout.setSpacing(15)
         
-        title_layout = QHBoxLayout()
-        title_layout.setContentsMargins(0, 0, 0, 0)
-        
-        title_label = QLabel("CARAC - Control Numismático")
-        title_label.setObjectName("titleLabel")
-        title_layout.addWidget(title_label)
-        
-        subtitle_label = QLabel("Universidad de Cádiz")
-        subtitle_label.setStyleSheet("color: #8C8984; font-size: 10pt; font-weight: 500;")
-        title_layout.addWidget(subtitle_label)
-        
-        title_layout.addStretch()
-        header_layout.addLayout(title_layout)
-        
-        status_layout = QHBoxLayout()
-        status_layout.setSpacing(8)
-        
-        self.connection_card = self.create_status_card("Conexión", "Desconectado", "#dc3545")
-        status_layout.addWidget(self.connection_card)
-        
-        self.arduino_card = self.create_status_card("Estado Arduino", "Sin datos", "#8C8984")
-        status_layout.addWidget(self.arduino_card)
-        
-        self.photo_card = self.create_status_card("Fotos Tomadas", "0", "#00607C")
-        status_layout.addWidget(self.photo_card)
-        
-        status_layout.addStretch()
-        header_layout.addLayout(status_layout)
+        header_layout.addLayout(self._create_title_section())
+        header_layout.addStretch()
+        header_layout.addLayout(self._create_status_cards())
+        header_layout.addWidget(self._create_connection_panel())
         
         return header_widget
     
-    def create_status_card(self, title: str, value: str, color: str) -> QWidget:
-        card = QFrame()
-        card.setFrameStyle(QFrame.NoFrame)
-        card.setStyleSheet("""
-            QFrame {
-                background-color: white;
-                border: none;
-                border-radius: 8px;
-                margin: 2px;
-            }
-        """)
-        card.setMinimumSize(150, 70)
-        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+    def _create_title_section(self) -> QVBoxLayout:
+        layout = QVBoxLayout()
+        layout.setSpacing(5)
         
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(12, 8, 12, 8)
-        layout.setSpacing(4)
-        
-        title_label = QLabel(title)
-        style_manager.set_card_title_style(title_label)
+        title_label = QLabel("CARAC - Control Numismático")
+        title_label.setObjectName("titleLabel")
         layout.addWidget(title_label)
         
-        value_label = QLabel(value)
-        initial_state = "disconnected" if "Desconectado" in value else "inactive"
-        style_manager.apply_card_value_style(value_label, initial_state)
-        layout.addWidget(value_label)
+        subtitle_label = QLabel(self.WINDOW_ORGANIZATION)
+        subtitle_label.setStyleSheet("color: #8C8984; font-size: 10pt; font-weight: 500;")
+        layout.addWidget(subtitle_label)
         
-        layout.addStretch()
-        
-        card.value_label = value_label
-        
-        return card
+        return layout
     
-    def create_left_panel(self) -> QWidget:
+    def _create_status_cards(self) -> QHBoxLayout:
+        layout = QHBoxLayout()
+        layout.setSpacing(8)
+        
+        self._connection_card = StatusCard("Conexión", "Desconectado", "disconnected")
+        layout.addWidget(self._connection_card)
+        
+        self._arduino_card = StatusCard("Estado", "Sin datos", "inactive")
+        layout.addWidget(self._arduino_card)
+        
+        return layout
+    
+    def _create_connection_panel(self) -> ConnectionPanel:
+        self._connection_panel = ConnectionPanel()
+        return self._connection_panel
+    
+    def _create_content_layout(self) -> QHBoxLayout:
+        layout = QHBoxLayout()
+        layout.setSpacing(10)
+        
+        layout.addWidget(self._create_left_panel(), 1.5)
+        layout.addWidget(self._create_middle_panel(), 1)
+        layout.addWidget(self._create_right_panel(), 1)
+        
+        return layout
+    
+    def _create_left_panel(self) -> QWidget:
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        
+        self._lighting_panel = LightingControlPanel(settings.lighting_channels)
+        layout.addWidget(self._lighting_panel)
+        
+        self._preset_panel = PresetControlPanel(PresetService.get_default_presets())
+        layout.addWidget(self._preset_panel)
+        
+        return panel
+    
+    def _create_middle_panel(self) -> QWidget:
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        
+        self._photo_panel = PhotoControlPanel()
+        layout.addWidget(self._photo_panel)
+        
+        return panel
+    
+    def _create_right_panel(self) -> QWidget:
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
         
-        log_group = QGroupBox("Registro de Actividad")
-        log_layout = QVBoxLayout(log_group)
-        
-        self.log_text = QTextEdit()
-        self.log_text.setObjectName("logText")
-        self.log_text.setReadOnly(True)
-        self.log_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        log_layout.addWidget(self.log_text)
-        
-        layout.addWidget(log_group)
-        return panel
-    
-    def create_connection_group(self) -> QGroupBox:
-        group = QGroupBox("Conexión Arduino")
-        layout = QVBoxLayout(group)
-        layout.setSpacing(8)
-        
-        port_layout = QHBoxLayout()
-        port_layout.addWidget(QLabel("Puerto:"))
-        self.port_combo = QComboBox()
-        self.port_combo.setEditable(True)
-        self.port_combo.setToolTip("Selecciona el puerto de comunicación Arduino")
-        port_layout.addWidget(self.port_combo, 1)
-        
-        self.refresh_button = QPushButton("↻")
-        style_manager.apply_button_style(self.refresh_button, "secondary")
-        self.refresh_button.setMaximumWidth(40)
-        self.refresh_button.setToolTip("Actualizar lista de puertos")
-        port_layout.addWidget(self.refresh_button)
-        layout.addLayout(port_layout)
-        
-        baud_layout = QHBoxLayout()
-        baud_layout.addWidget(QLabel("Velocidad:"))
-        self.baud_combo = QComboBox()
-        self.baud_combo.addItems(["9600", "19200", "38400", "57600", "115200"])
-        self.baud_combo.setCurrentText("9600")
-        baud_layout.addWidget(self.baud_combo, 1)
-        layout.addLayout(baud_layout)
-        
-        self.connect_button = QPushButton("Conectar")
-        self.connect_button.setMinimumHeight(30)
-        layout.addWidget(self.connect_button)
-        
-        return group
-    
-    def create_lighting_group(self) -> QGroupBox:
-        group = QGroupBox("Control de Iluminación")
-        layout = QVBoxLayout(group)
-        layout.setSpacing(10)
-        
-        self.lighting_controls = {}
-        
-        channel_names = {
-            "top": "Superior",
-            "bottom": "Inferior", 
-            "left": "Izquierda",
-            "right": "Derecha",
-            "ambient": "Ambiente"
-        }
-        
-        for channel in settings.lighting_channels:
-            channel_container = QFrame()
-            channel_container.setStyleSheet("""
-                QFrame {
-                    background: #f8f9fa;
-                    border-radius: 6px;
-                    padding: 6px;
-                    margin: 1px;
-                }
-            """)
-            
-            channel_layout = QVBoxLayout(channel_container)
-            channel_layout.setSpacing(4)
-            
-            header_layout = QHBoxLayout()
-            channel_name = channel_names.get(channel, channel.title())
-            label = QLabel(channel_name)
-            label.setStyleSheet("font-weight: 600; color: #00607C; font-size: 8pt;")
-            header_layout.addWidget(label)
-            
-            value_label = QLabel("0")
-            value_label.setMinimumWidth(30)
-            value_label.setAlignment(Qt.AlignRight)
-            value_label.setStyleSheet("font-weight: 600; color: #2c3e50; font-size: 8pt;")
-            header_layout.addWidget(value_label)
-            channel_layout.addLayout(header_layout)
-            
-            slider = QSlider(Qt.Horizontal)
-            slider.setRange(0, settings.max_lighting_intensity)
-            slider.setValue(0)
-            slider.setMinimumHeight(20)
-            channel_layout.addWidget(slider)
-            
-            layout.addWidget(channel_container)
-            
-            self.lighting_controls[channel] = {
-                "slider": slider,
-                "value_label": value_label
-            }
-        
-        return group
-    
-    def create_photo_group(self) -> QGroupBox:
-        group = QGroupBox("Secuencia de Fotos")
-        layout = QVBoxLayout(group)
-        layout.setSpacing(8)
-        
-        settings_container = QFrame()
-        settings_container.setStyleSheet("""
-            QFrame {
-                background: #f8f9fa;
-                border-radius: 6px;
-                padding: 8px;
-                margin: 1px;
-            }
-        """)
-        settings_layout = QGridLayout(settings_container)
-        settings_layout.setSpacing(6)
-        
-        qty_label = QLabel("Cantidad:")
-        qty_label.setStyleSheet("font-size: 8pt;")
-        settings_layout.addWidget(qty_label, 0, 0)
-        
-        self.photo_count_spin = QSpinBox()
-        self.photo_count_spin.setRange(1, 100)
-        self.photo_count_spin.setValue(settings.photo_sequence_count)
-        self.photo_count_spin.setMinimumHeight(25)
-        settings_layout.addWidget(self.photo_count_spin, 0, 1)
-        
-        interval_label = QLabel("Intervalo (s):")
-        interval_label.setStyleSheet("font-size: 8pt;")
-        settings_layout.addWidget(interval_label, 1, 0)
-        
-        self.photo_delay_spin = QDoubleSpinBox()
-        self.photo_delay_spin.setRange(0.1, 10.0)
-        self.photo_delay_spin.setValue(settings.photo_sequence_delay)
-        self.photo_delay_spin.setSingleStep(0.1)
-        self.photo_delay_spin.setMinimumHeight(25)
-        settings_layout.addWidget(self.photo_delay_spin, 1, 1)
-        
-        layout.addWidget(settings_container)
-        
-        buttons_layout = QVBoxLayout()
-        buttons_layout.setSpacing(4)
-        
-        self.start_photo_button = QPushButton("Iniciar Secuencia")
-        style_manager.apply_button_style(self.start_photo_button, "start")
-        self.start_photo_button.setMinimumHeight(30)
-        buttons_layout.addWidget(self.start_photo_button)
-        
-        led_layout = QHBoxLayout()
-        
-        self.toggle_led_button = QPushButton("LED de Prueba")
-        style_manager.apply_button_style(self.toggle_led_button, "warning")
-        self.toggle_led_button.setMinimumHeight(25)
-        led_layout.addWidget(self.toggle_led_button)
-        
-        self.led_status_label = QLabel("●")
-        self.led_status_label.setFixedSize(20, 20)
-        self.led_status_label.setAlignment(Qt.AlignCenter)
-        self.led_status_label.setStyleSheet("""
-            QLabel {
-                color: #666666;
-                font-size: 16px;
-                font-weight: bold;
-                border-radius: 10px;
-                background-color: #f0f0f0;
-            }
-        """)
-        self.led_status_label.setToolTip("Estado del LED L del Arduino")
-        led_layout.addWidget(self.led_status_label)
-        
-        buttons_layout.addLayout(led_layout)
-        
-        layout.addLayout(buttons_layout)
-        
-        return group
-    
-    def create_right_panel(self) -> QWidget:
-        panel = QWidget()
-        main_layout = QHBoxLayout(panel)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(8)
-        
-        left_column = QVBoxLayout()
-        left_column.setSpacing(6)
-        
-        connection_group = self.create_connection_group()
-        left_column.addWidget(connection_group)
-        
-        photo_group = self.create_photo_group()
-        left_column.addWidget(photo_group)
-        
-        left_column.addStretch()
-        
-        right_column = QVBoxLayout()
-        right_column.setSpacing(6)
-        
-        lighting_group = self.create_lighting_group()
-        right_column.addWidget(lighting_group)
-        
-        controls_group = QGroupBox("Controles Rápidos")
-        controls_layout = QVBoxLayout(controls_group)
-        controls_layout.setSpacing(6)
-        
-        self.emergency_stop_button = QPushButton("PARADA DE EMERGENCIA")
-        style_manager.apply_button_style(self.emergency_stop_button, "emergency")
-        self.emergency_stop_button.setMinimumHeight(35)
-        controls_layout.addWidget(self.emergency_stop_button)
-        
-        log_buttons_layout = QHBoxLayout()
-        log_buttons_layout.setSpacing(4)
-        
-        clear_log_button = QPushButton("Limpiar Registro")
-        style_manager.apply_button_style(clear_log_button, "secondary")
-        clear_log_button.clicked.connect(self.clear_log)
-        log_buttons_layout.addWidget(clear_log_button)
-        
-        save_log_button = QPushButton("Guardar Registro")
-        style_manager.apply_button_style(save_log_button, "secondary")
-        save_log_button.clicked.connect(self.save_log)
-        log_buttons_layout.addWidget(save_log_button)
-        
-        controls_layout.addLayout(log_buttons_layout)
-        
-        info_layout = QHBoxLayout()
-        info_layout.addWidget(QLabel("Estado:"))
-        self.system_info_label = QLabel("Iniciado")
-        style_manager.apply_system_info_style(self.system_info_label, "normal")
-        info_layout.addWidget(self.system_info_label)
-        info_layout.addStretch()
-        controls_layout.addLayout(info_layout)
-        
-        right_column.addWidget(controls_group)
-        right_column.addStretch()
-        
-        main_layout.addLayout(left_column)
-        main_layout.addLayout(right_column)
+        self._log_panel = LogPanel()
+        layout.addWidget(self._log_panel)
         
         return panel
     
-    def setup_connections(self):
-        self.refresh_button.clicked.connect(self.refresh_ports)
-        self.connect_button.clicked.connect(self.toggle_connection)
+    def _setup_connections(self) -> None:
+        self._connection_panel.port_refresh_requested.connect(self._refresh_ports)
+        self._connection_panel.connection_toggle_requested.connect(self._toggle_connection)
+        self._port_refresh_thread.ports_updated.connect(self._update_port_list)
         
-        for channel, controls in self.lighting_controls.items():
-            slider = controls["slider"]
-            value_label = controls["value_label"]
-            
-            slider.valueChanged.connect(
-                lambda value, ch=channel, label=value_label: self.on_lighting_changed(ch, value, label)
-            )
+        self._lighting_panel.lighting_changed.connect(self._on_lighting_changed)
         
-        self.start_photo_button.clicked.connect(self.start_photo_sequence)
+        self._preset_panel.preset_selected.connect(self._on_preset_selected)
         
-        self.toggle_led_button.clicked.connect(self.toggle_test_led)
-        
-        self.emergency_stop_button.clicked.connect(self.emergency_stop)
-        
-        self.port_refresh_thread.ports_updated.connect(self.update_port_list)
+        self._photo_panel.position_forward_requested.connect(self._on_position_forward)
+        self._photo_panel.position_backward_requested.connect(self._on_position_backward)
+        self._photo_panel.flip_coin_requested.connect(self._on_flip_coin)
+        self._photo_panel.take_photo_requested.connect(self._on_take_photo)
+        self._photo_panel.start_sequence_requested.connect(self._on_start_sequence)
+        self._photo_panel.stop_sequence_requested.connect(self._on_stop_sequence)
+        self._photo_panel.emergency_stop_requested.connect(self._on_emergency_stop)
+        self._photo_panel.led_toggle_requested.connect(self._on_toggle_led)
     
-    def setup_timers(self):
-        self.port_refresh_timer.timeout.connect(self.refresh_ports)
-        self.port_refresh_timer.start(5000)
-        
-        self.refresh_ports()
+    def _setup_session_callbacks(self) -> None:
+        self._session_controller.add_status_callback(self._on_connection_status_changed)
+        self._session_controller.add_response_callback(self._on_arduino_response)
     
-    def apply_styles(self):
+    def _start_port_refresh(self) -> None:
+        self._port_refresh_timer.timeout.connect(self._refresh_ports)
+        self._port_refresh_timer.start(self.PORT_REFRESH_INTERVAL)
+        self._refresh_ports()
+    
+    def _apply_styles(self) -> None:
         stylesheet = style_manager.get_combined_stylesheet()
         if stylesheet:
             self.setStyleSheet(stylesheet)
             logger.info("Applied combined stylesheet successfully")
         else:
-            logger.warning("No stylesheet available, using fallback")
-            self.setStyleSheet("""
-                QMainWindow {
-                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                                stop: 0 #f8f9fa, stop: 1 #e9ecef);
-                    color: #2c3e50;
-                }
-            """)
+            logger.warning("No stylesheet available")
     
-    def refresh_ports(self):
-        if not self.port_refresh_thread.isRunning():
-            self.port_refresh_thread.start()
+    def _refresh_ports(self) -> None:
+        if not self._port_refresh_thread.isRunning():
+            self._port_refresh_thread.start()
     
-    def update_port_list(self, ports: list):
-        current_port = self.port_combo.currentText()
-        
-        self.port_combo.clear()
-        self.port_combo.addItems(ports)
-        
-        if current_port and current_port in ports:
-            self.port_combo.setCurrentText(current_port)
-        
-        arduino_ports = get_arduino_ports()
-        for i in range(self.port_combo.count()):
-            port = self.port_combo.itemText(i)
-            if port in arduino_ports:
-                self.port_combo.setItemText(i, f"{port} (Arduino)")
+    def _update_port_list(self, ports: list[str]) -> None:
+        annotated_ports = PortService.annotate_arduino_ports(ports)
+        self._connection_panel.set_ports(annotated_ports)
     
-    def toggle_connection(self):
-        if self.session_controller.is_connected:
-            self.session_controller.disconnect()
+    def _toggle_connection(self) -> None:
+        if self._session_controller.is_connected:
+            self._session_controller.disconnect()
         else:
-            self.connect_to_arduino()
+            self._connect_to_arduino()
     
-    def connect_to_arduino(self):
-        port = self.port_combo.currentText()
+    def _connect_to_arduino(self) -> None:
+        port = self._connection_panel.get_selected_port()
         if not port:
             QMessageBox.warning(self, "Error", "Por favor selecciona un puerto")
             return
         
-        port = port.replace(" (Arduino)", "")
+        port = PortService.clean_port_name(port)
+        self._log_panel.add_message(f"Conectando a {port}...")
         
-        try:
-            baud_rate = int(self.baud_combo.currentText())
-        except ValueError:
-            baud_rate = 9600
-        
-        self.log_message(f"Conectando a {port} a {baud_rate} baud...")
-        
-        success = self.session_controller.connect(port, baud_rate)
+        success = self._session_controller.connect(port, settings.default_baud_rate)
         
         if success:
-            self.log_message("Conectado exitosamente")
+            self._log_panel.add_message("Conectado exitosamente")
         else:
-            self.log_message("Error de conexión", error=True)
+            self._log_panel.add_message("Error de conexión", is_error=True)
     
-    def on_connection_status_changed(self, status: ConnectionStatus):
+    def _on_connection_status_changed(self, status: ConnectionStatus) -> None:
         if status == ConnectionStatus.CONNECTED:
-            self.connect_button.setText("Desconectar")
-            style_manager.apply_button_style(self.connect_button, "disconnect")
-            
-            self.connection_card.value_label.setText("Conectado")
-            style_manager.apply_card_value_style(self.connection_card.value_label, "connected")
-            
-            self.system_info_label.setText("Conectado")
-            style_manager.apply_system_info_style(self.system_info_label, "connected")
-            
+            self._connection_panel.set_connect_button_text("Desconectar")
+            style_manager.apply_button_style(self._connection_panel.connect_button, "disconnect")
+            self._connection_card.set_value("Conectado", "connected")
+            self._photo_panel.set_system_info("Conectado", "connected")
         elif status == ConnectionStatus.CONNECTING:
-            self.connection_card.value_label.setText("Conectando...")
-            style_manager.apply_card_value_style(self.connection_card.value_label, "connecting")
-            
+            self._connection_card.set_value("Conectando...", "connecting")
         elif status == ConnectionStatus.ERROR:
-            self.connection_card.value_label.setText("Error")
-            style_manager.apply_card_value_style(self.connection_card.value_label, "disconnected")
-            
+            self._connection_card.set_value("Error", "disconnected")
         else:
-            self.connect_button.setText("Conectar")
-            self.connect_button.setObjectName("")
-            style_manager._refresh_widget_style(self.connect_button)
-            
-            self.connection_card.value_label.setText("Desconectado")
-            style_manager.apply_card_value_style(self.connection_card.value_label, "disconnected")
-            
-            self.system_info_label.setText("Desconectado")
-            style_manager.apply_system_info_style(self.system_info_label, "disconnected")
+            self._connection_panel.set_connect_button_text("Conectar")
+            self._connection_panel.connect_button.setObjectName("")
+            style_manager._refresh_widget_style(self._connection_panel.connect_button)
+            self._connection_card.set_value("Desconectado", "disconnected")
+            self._photo_panel.set_system_info("Desconectado", "disconnected")
     
-    def on_lighting_changed(self, channel: str, value: int, label: QLabel):
-        label.setText(str(value))
+    def _on_lighting_changed(self, channel: str, intensity: int) -> None:
+        self._preset_panel.clear_selection()
         
-        if self.session_controller.is_connected:
-            success = self.session_controller.set_lighting(channel, value)
+        if self._session_controller.is_connected:
+            success = self._session_controller.set_lighting(channel, intensity)
+            ring_index = settings.lighting_channels.index(channel) if channel in settings.lighting_channels else -1
             if success:
-                self.log_message(f"Iluminación {channel} configurada a {value}")
+                normalized = intensity / 255.0
+                self._log_panel.add_message(f"Anillo {ring_index + 1} configurado a {normalized:.2f}")
             else:
-                self.log_message(f"Error al configurar iluminación {channel}", error=True)
+                self._log_panel.add_message(f"Error al configurar Anillo {ring_index + 1}", is_error=True)
     
-    def start_photo_sequence(self):
-        if not self.session_controller.is_connected:
-            QMessageBox.warning(self, "Error", "No conectado a Arduino")
+    def _on_preset_selected(self, preset_name: str, preset_values: dict[str, int]) -> None:
+        self._lighting_panel.set_all_values(preset_values)
+        self._log_panel.add_message(f"Perfil '{preset_name}' aplicado")
+    
+    def _on_position_forward(self) -> None:
+        if not self._check_connected():
+            return
+        self._log_panel.add_message("Moviendo posición hacia adelante...")
+    
+    def _on_position_backward(self) -> None:
+        if not self._check_connected():
+            return
+        self._log_panel.add_message("Moviendo posición hacia atrás...")
+    
+    def _on_flip_coin(self) -> None:
+        if not self._check_connected():
+            return
+        self._log_panel.add_message("Volteando moneda...")
+    
+    def _on_take_photo(self) -> None:
+        if not self._check_connected():
+            return
+        self._log_panel.add_message("Tomando fotografía...")
+    
+    def _on_start_sequence(self) -> None:
+        if not self._check_connected():
             return
         
-        count = self.photo_count_spin.value()
-        delay = self.photo_delay_spin.value()
-        
-        self.log_message(f"Iniciando secuencia: {count} fotos, intervalo {delay}s")
-        
-        success = self.session_controller.start_photo_sequence(count, delay)
-        
-        if success:
-            self.log_message("Secuencia de fotos iniciada")
-            self.photo_card.value_label.setText("En progreso")
-            style_manager.apply_card_value_style(self.photo_card.value_label, "progress")
-        else:
-            self.log_message("Error al iniciar secuencia de fotos", error=True)
+        self._log_panel.add_message("Iniciando secuencia completa...")
+        self._photo_panel.set_sequence_active(True)
+        self._arduino_card.set_value("En proceso", "progress")
     
-    def toggle_test_led(self):
-        if not self.session_controller.is_connected:
-            QMessageBox.warning(self, "Error", "No conectado a Arduino")
+    def _on_stop_sequence(self) -> None:
+        self._log_panel.add_message("Deteniendo secuencia...", is_error=True)
+        self._photo_panel.set_sequence_active(False)
+        self._arduino_card.set_value("Operativo", "operational")
+    
+    def _on_toggle_led(self) -> None:
+        if not self._check_connected():
             return
         
-        self.log_message("Alternando LED de prueba...")
-        
-        response = self.session_controller.toggle_led()
+        self._log_panel.add_message("Alternando LED de prueba...")
+        response = self._session_controller.toggle_led()
         
         if response and response.success:
             led_state = response.data.get('led_state', False) if response.data else False
-            self.update_led_status(led_state)
-            
+            self._photo_panel.set_led_status(led_state)
             state_text = "encendido" if led_state else "apagado"
-            self.log_message(f"LED de prueba {state_text}")
+            self._log_panel.add_message(f"LED de prueba {state_text}")
         else:
-            self.log_message("Error al alternar LED de prueba", error=True)
+            self._log_panel.add_message("Error al alternar LED de prueba", is_error=True)
     
-    def update_led_status(self, led_on: bool):
-        if led_on:
-            self.led_status_label.setStyleSheet("""
-                QLabel {
-                    color: #ffffff;
-                    font-size: 16px;
-                    font-weight: bold;
-                    border-radius: 10px;
-                    background-color: #4CAF50;
-                }
-            """)
-            self.led_status_label.setToolTip("LED L encendido")
-        else:
-            self.led_status_label.setStyleSheet("""
-                QLabel {
-                    color: #666666;
-                    font-size: 16px;
-                    font-weight: bold;
-                    border-radius: 10px;
-                    background-color: #f0f0f0;
-                }
-            """)
-            self.led_status_label.setToolTip("LED L apagado")
+    def _on_emergency_stop(self) -> None:
+        if self._session_controller.is_connected:
+            self._session_controller.disconnect()
+        
+        self._lighting_panel.set_all_values({ch: 0 for ch in settings.lighting_channels})
+        self._photo_panel.set_sequence_active(False)
+        self._log_panel.add_message("PARADA DE EMERGENCIA ACTIVADA", is_error=True)
+        self._photo_panel.set_system_info("Parada de emergencia", "emergency")
     
-    def on_arduino_response(self, response: Response):
+    def _on_arduino_response(self, response: Response) -> None:
         if response.data and 'led_state' in response.data:
             led_state = response.data['led_state']
-            self.update_led_status(led_state)
-            
-        if "raw" in response.data:
-            raw_data = response.data["raw"]
-            self.log_message(f"RAW: '{raw_data}' (len={len(raw_data)}, bytes={[ord(c) for c in raw_data[:20]]})", error=True)
+            self._photo_panel.set_led_status(led_state)
         
         if response.success:
-            self.log_message(f"Arduino: {response.message}")
-            self.arduino_card.value_label.setText("Operativo")
-            style_manager.apply_card_value_style(self.arduino_card.value_label, "operational")
+            self._log_panel.add_message(f"Arduino: {response.message}")
+            self._arduino_card.set_value("Operativo", "operational")
         else:
-            self.log_message(f"Error Arduino: {response.message}", error=True)
-            self.arduino_card.value_label.setText("Error")
-            style_manager.apply_card_value_style(self.arduino_card.value_label, "disconnected")
+            self._log_panel.add_message(f"Error Arduino: {response.message}", is_error=True)
+            self._arduino_card.set_value("Error", "disconnected")
     
-    def log_message(self, message: str, error: bool = False):
-        from datetime import datetime
-        
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        level = "ERROR" if error else "INFO"
-        color = "red" if error else "black"
-        
-        log_entry = f'<span style="color: gray;">[{timestamp}]</span> <span style="color: {color};">{level}: {message}</span>'
-        
-        self.log_text.append(log_entry)
-        
-        scrollbar = self.log_text.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+    def _check_connected(self) -> bool:
+        if not self._session_controller.is_connected:
+            QMessageBox.warning(self, "Error", "No conectado a Arduino")
+            return False
+        return True
     
-    def closeEvent(self, event):
-        if self.session_controller.is_connected:
-            self.session_controller.disconnect()
+    def closeEvent(self, event) -> None:
+        if self._session_controller.is_connected:
+            self._session_controller.disconnect()
         
-        self.port_refresh_timer.stop()
-        if self.port_refresh_thread.isRunning():
-            self.port_refresh_thread.quit()
-            self.port_refresh_thread.wait()
+        self._port_refresh_timer.stop()
+        if self._port_refresh_thread.isRunning():
+            self._port_refresh_thread.quit()
+            self._port_refresh_thread.wait()
         
         event.accept()
-    
-    def update_photo_count(self, count: int):
-        self.photo_card.value_label.setText(str(count))
-        if count > 0:
-            style_manager.apply_card_value_style(self.photo_card.value_label, "default")
-        else:
-            style_manager.apply_card_value_style(self.photo_card.value_label, "inactive")
-    
-    def emergency_stop(self):
-        if self.session_controller.is_connected:
-            self.session_controller.disconnect()
-        
-        for channel, controls in self.lighting_controls.items():
-            controls["slider"].setValue(0)
-            controls["value_label"].setText("0")
-        
-        self.log_message("PARADA DE EMERGENCIA ACTIVADA", error=True)
-        self.system_info_label.setText("Parada de emergencia")
-        style_manager.apply_system_info_style(self.system_info_label, "emergency")
-    
-    def clear_log(self):
-        self.log_text.clear()
-        self.log_message("Registro de actividad limpiado")
-    
-    def save_log(self):
-        from datetime import datetime
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename, _ = QFileDialog.getSaveFileName(
-            self,
-            "Guardar Registro de Actividad",
-            f"registro_carac_{timestamp}.txt",
-            "Archivos de texto (*.txt);;Todos los archivos (*.*)"
-        )
-        
-        if filename:
-            try:
-                with open(filename, 'w', encoding='utf-8') as f:
-                    f.write(f"Registro de Actividad - CARAC UCA\n")
-                    f.write(f"Generado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                    f.write("="*50 + "\n\n")
-                    f.write(self.log_text.toPlainText())
-                
-                self.log_message(f"Registro guardado en: {filename}")
-            except Exception as e:
-                self.log_message(f"Error al guardar registro: {str(e)}", error=True)

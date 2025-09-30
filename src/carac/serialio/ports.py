@@ -1,10 +1,19 @@
 import serial.tools.list_ports
-from typing import List, Optional
+from typing import Dict
 
 from loguru import logger
 
 
-def get_available_ports() -> List[str]:
+ARDUINO_INDICATORS = [
+    "arduino",
+    "ch340",
+    "cp210",
+    "ftdi",
+    "usb serial",
+]
+
+
+def get_available_ports() -> list[str]:
     try:
         ports = serial.tools.list_ports.comports()
         port_list = [port.device for port in ports]
@@ -15,7 +24,7 @@ def get_available_ports() -> List[str]:
         return []
 
 
-def get_port_info(port: str) -> Optional[dict]:
+def get_port_info(port: str) -> Dict[str, str | int | None] | None:
     try:
         ports = serial.tools.list_ports.comports()
         for p in ports:
@@ -41,28 +50,19 @@ def is_arduino_port(port: str) -> bool:
     if not info:
         return False
     
-    arduino_indicators = [
-        "arduino",
-        "ch340",
-        "cp210",
-        "ftdi",
-        "usb serial",
-    ]
+    description = str(info.get("description", "")).lower()
+    manufacturer = str(info.get("manufacturer", "")).lower()
+    product = str(info.get("product", "")).lower()
     
-    description = info.get("description", "").lower() if info.get("description") else ""
-    manufacturer = info.get("manufacturer", "").lower() if info.get("manufacturer") else ""
-    product = info.get("product", "").lower() if info.get("product") else ""
-    
-    for indicator in arduino_indicators:
-        if (indicator in description or 
-            indicator in manufacturer or 
-            indicator in product):
-            return True
-    
-    return False
+    return any(
+        indicator in description or
+        indicator in manufacturer or
+        indicator in product
+        for indicator in ARDUINO_INDICATORS
+    )
 
 
-def get_arduino_ports() -> List[str]:
+def get_arduino_ports() -> list[str]:
     all_ports = get_available_ports()
     arduino_ports = [port for port in all_ports if is_arduino_port(port)]
     logger.info(f"Found {len(arduino_ports)} Arduino ports: {arduino_ports}")

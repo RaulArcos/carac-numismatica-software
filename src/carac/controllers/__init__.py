@@ -1,3 +1,3 @@
-from .session_controller import SessionController
+from .session_controller import SessionController, LightingState
 
-__all__ = ["SessionController"]
+__all__ = ["SessionController", "LightingState"]
