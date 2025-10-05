@@ -15,7 +15,8 @@ from loguru import logger
 
 from ..config.settings import settings
 from ..controllers.session_controller import SessionController
-from ..protocol.models import ConnectionStatus, Response
+from ..protocol.models import ConnectionStatus, Response, Message
+from ..serialio.connection_monitor import ConnectionHealth, AcknowledgmentInfo
 from .style_manager import style_manager
 from .widgets import (
     StatusCard,
@@ -34,9 +35,15 @@ class MainWindow(QMainWindow):
     WINDOW_ORGANIZATION = "Universidad de Cádiz"
     WINDOW_WIDTH = 1200
     WINDOW_HEIGHT = 750
+    WINDOW_X = 100
+    WINDOW_Y = 100
     MIN_WIDTH = 1100
     MIN_HEIGHT = 700
-    PORT_REFRESH_INTERVAL = 5000
+    PORT_REFRESH_INTERVAL_MS = 5000
+    LAYOUT_MARGIN = 10
+    LAYOUT_SPACING = 10
+    HEADER_SPACING = 15
+    STATUS_CARD_SPACING = 8
     
     def __init__(self) -> None:
         super().__init__()
@@ -56,7 +63,12 @@ class MainWindow(QMainWindow):
     
     def _setup_window(self) -> None:
         self.setWindowTitle(self.WINDOW_TITLE)
-        self.setGeometry(100, 100, self.WINDOW_WIDTH, self.WINDOW_HEIGHT)
+        self.setGeometry(
+            self.WINDOW_X,
+            self.WINDOW_Y,
+            self.WINDOW_WIDTH,
+            self.WINDOW_HEIGHT
+        )
         self.setMinimumSize(self.MIN_WIDTH, self.MIN_HEIGHT)
         self._load_window_icon()
     
@@ -79,8 +91,13 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(
+            self.LAYOUT_MARGIN,
+            self.LAYOUT_MARGIN,
+            self.LAYOUT_MARGIN,
+            self.LAYOUT_MARGIN
+        )
+        main_layout.setSpacing(self.LAYOUT_SPACING)
         
         main_layout.addWidget(self._create_header())
         main_layout.addLayout(self._create_content_layout(), 1)
@@ -89,7 +106,7 @@ class MainWindow(QMainWindow):
         header_widget = QWidget()
         header_layout = QHBoxLayout(header_widget)
         header_layout.setContentsMargins(0, 0, 0, 0)
-        header_layout.setSpacing(15)
+        header_layout.setSpacing(self.HEADER_SPACING)
         
         header_layout.addLayout(self._create_title_section())
         header_layout.addStretch()
@@ -107,17 +124,20 @@ class MainWindow(QMainWindow):
         layout.addWidget(title_label)
         
         subtitle_label = QLabel(self.WINDOW_ORGANIZATION)
-        subtitle_label.setStyleSheet("color: #8C8984; font-size: 10pt; font-weight: 500;")
+        subtitle_label.setObjectName("subtitleLabel")
         layout.addWidget(subtitle_label)
         
         return layout
     
     def _create_status_cards(self) -> QHBoxLayout:
         layout = QHBoxLayout()
-        layout.setSpacing(8)
+        layout.setSpacing(self.STATUS_CARD_SPACING)
         
         self._connection_card = StatusCard("Conexión", "Desconectado", "disconnected")
         layout.addWidget(self._connection_card)
+        
+        self._heartbeat_card = StatusCard("Heartbeat", "—", "inactive")
+        layout.addWidget(self._heartbeat_card)
         
         self._arduino_card = StatusCard("Estado", "Sin datos", "inactive")
         layout.addWidget(self._arduino_card)
@@ -133,7 +153,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(10)
         
         layout.addWidget(self._create_left_panel(), 1.5)
-        layout.addWidget(self._create_middle_panel(), 1)
+        layout.addWidget(self._create_middle_panel(), 0.5)
         layout.addWidget(self._create_right_panel(), 1)
         
         return layout
@@ -160,6 +180,7 @@ class MainWindow(QMainWindow):
         
         self._photo_panel = PhotoControlPanel()
         layout.addWidget(self._photo_panel)
+        layout.addStretch()
         
         return panel
     
@@ -195,10 +216,13 @@ class MainWindow(QMainWindow):
     def _setup_session_callbacks(self) -> None:
         self._session_controller.add_status_callback(self._on_connection_status_changed)
         self._session_controller.add_response_callback(self._on_arduino_response)
+        self._session_controller.add_event_callback(self._on_esp32_event)
+        self._session_controller.add_heartbeat_callback(self._on_heartbeat_received)
+        self._session_controller.add_ack_callback(self._on_acknowledgment_received)
     
     def _start_port_refresh(self) -> None:
         self._port_refresh_timer.timeout.connect(self._refresh_ports)
-        self._port_refresh_timer.start(self.PORT_REFRESH_INTERVAL)
+        self._port_refresh_timer.start(self.PORT_REFRESH_INTERVAL_MS)
         self._refresh_ports()
     
     def _apply_styles(self) -> None:
@@ -245,16 +269,20 @@ class MainWindow(QMainWindow):
             style_manager.apply_button_style(self._connection_panel.connect_button, "disconnect")
             self._connection_card.set_value("Conectado", "connected")
             self._photo_panel.set_system_info("Conectado", "connected")
+            self._heartbeat_card.set_value("Esperando...", "connecting")
         elif status == ConnectionStatus.CONNECTING:
             self._connection_card.set_value("Conectando...", "connecting")
+            self._heartbeat_card.set_value("—", "inactive")
         elif status == ConnectionStatus.ERROR:
             self._connection_card.set_value("Error", "disconnected")
+            self._heartbeat_card.set_value("—", "inactive")
         else:
             self._connection_panel.set_connect_button_text("Conectar")
             self._connection_panel.connect_button.setObjectName("")
-            style_manager._refresh_widget_style(self._connection_panel.connect_button)
+            style_manager.refresh_widget_style(self._connection_panel.connect_button)
             self._connection_card.set_value("Desconectado", "disconnected")
             self._photo_panel.set_system_info("Desconectado", "disconnected")
+            self._heartbeat_card.set_value("—", "inactive")
     
     def _on_lighting_changed(self, channel: str, intensity: int) -> None:
         self._preset_panel.clear_selection()
@@ -273,24 +301,48 @@ class MainWindow(QMainWindow):
         self._log_panel.add_message(f"Perfil '{preset_name}' aplicado")
     
     def _on_position_forward(self) -> None:
+        """Handle motor position forward button."""
         if not self._check_connected():
             return
         self._log_panel.add_message("Moviendo posición hacia adelante...")
+        success = self._session_controller.motor_position("forward")
+        if success:
+            self._log_panel.add_message("Posición adelantada")
+        else:
+            self._log_panel.add_message("Error al mover posición", is_error=True)
     
     def _on_position_backward(self) -> None:
+        """Handle motor position backward button."""
         if not self._check_connected():
             return
         self._log_panel.add_message("Moviendo posición hacia atrás...")
+        success = self._session_controller.motor_position("backward")
+        if success:
+            self._log_panel.add_message("Posición retrocedida")
+        else:
+            self._log_panel.add_message("Error al mover posición", is_error=True)
     
     def _on_flip_coin(self) -> None:
+        """Handle flip coin button."""
         if not self._check_connected():
             return
         self._log_panel.add_message("Volteando moneda...")
+        success = self._session_controller.motor_flip()
+        if success:
+            self._log_panel.add_message("Moneda volteada")
+        else:
+            self._log_panel.add_message("Error al voltear moneda", is_error=True)
     
     def _on_take_photo(self) -> None:
+        """Handle take photo button."""
         if not self._check_connected():
             return
         self._log_panel.add_message("Tomando fotografía...")
+        success = self._session_controller.camera_trigger()
+        if success:
+            self._log_panel.add_message("Foto capturada")
+        else:
+            self._log_panel.add_message("Error al tomar foto", is_error=True)
     
     def _on_start_sequence(self) -> None:
         if not self._check_connected():
@@ -321,25 +373,114 @@ class MainWindow(QMainWindow):
             self._log_panel.add_message("Error al alternar LED de prueba", is_error=True)
     
     def _on_emergency_stop(self) -> None:
-        if self._session_controller.is_connected:
-            self._session_controller.disconnect()
+        """Handle emergency stop button."""
+        if not self._check_connected():
+            return
         
-        self._lighting_panel.set_all_values({ch: 0 for ch in settings.lighting_channels})
-        self._photo_panel.set_sequence_active(False)
-        self._log_panel.add_message("PARADA DE EMERGENCIA ACTIVADA", is_error=True)
-        self._photo_panel.set_system_info("Parada de emergencia", "emergency")
+        self._log_panel.add_message("PARO DE EMERGENCIA ACTIVADO", is_error=True)
+        success = self._session_controller.emergency_stop()
+        if success:
+            self._log_panel.add_message("Sistema detenido")
+            self._photo_panel.set_sequence_active(False)
+            self._arduino_card.set_value("Detenido", "disconnected")
+        else:
+            self._log_panel.add_message("Error en paro de emergencia", is_error=True)
     
     def _on_arduino_response(self, response: Response) -> None:
+        """Handle async responses from ESP32."""
         if response.data and 'led_state' in response.data:
             led_state = response.data['led_state']
             self._photo_panel.set_led_status(led_state)
         
         if response.success:
-            self._log_panel.add_message(f"Arduino: {response.message}")
+            self._log_panel.add_message(f"ESP32: {response.message}")
             self._arduino_card.set_value("Operativo", "operational")
         else:
-            self._log_panel.add_message(f"Error Arduino: {response.message}", is_error=True)
+            self._log_panel.add_message(f"Error ESP32: {response.message}", is_error=True)
             self._arduino_card.set_value("Error", "disconnected")
+    
+    def _on_esp32_event(self, event) -> None:
+        """Handle async events from ESP32."""
+        from ..protocol.models import MessageType, Message
+        
+        if not isinstance(event, Message):
+            return
+        
+        logger.info(f"ESP32 Event: {event.type}")
+        
+        # Handle sequence events
+        if event.type == MessageType.EVENT_SEQUENCE_STARTED:
+            total = event.payload.get("total_photos", 0)
+            self._log_panel.add_message(f"Secuencia iniciada: {total} fotos")
+            self._photo_panel.set_sequence_active(True)
+        
+        elif event.type == MessageType.EVENT_SEQUENCE_PROGRESS:
+            current = event.payload.get("current_photo", 0)
+            total = event.payload.get("total_photos", 0)
+            action = event.payload.get("action", "")
+            self._log_panel.add_message(f"Progreso: {current}/{total} - {action}")
+        
+        elif event.type == MessageType.EVENT_SEQUENCE_COMPLETED:
+            photos = event.payload.get("photos_taken", 0)
+            duration = event.payload.get("duration", 0)
+            self._log_panel.add_message(f"Secuencia completada: {photos} fotos en {duration:.1f}s")
+            self._photo_panel.set_sequence_active(False)
+        
+        elif event.type == MessageType.EVENT_SEQUENCE_STOPPED:
+            reason = event.payload.get("reason", "unknown")
+            photos = event.payload.get("photos_taken", 0)
+            self._log_panel.add_message(f"Secuencia detenida ({reason}): {photos} fotos", is_error=True)
+            self._photo_panel.set_sequence_active(False)
+        
+        elif event.type == MessageType.EVENT_ERROR:
+            msg = event.payload.get("message", "Error desconocido")
+            severity = event.payload.get("severity", "medium")
+            self._log_panel.add_message(f"Error [{severity}]: {msg}", is_error=True)
+        
+        elif event.type == MessageType.EVENT_CAMERA_TRIGGERED:
+            duration = event.payload.get("duration", 0)
+            self._log_panel.add_message(f"Cámara activada ({duration}ms)")
+        
+        elif event.type == MessageType.EVENT_MOTOR_COMPLETE:
+            position = event.payload.get("position", 0)
+            self._log_panel.add_message(f"Motor en posición: {position}")
+    
+    def _on_heartbeat_received(self, health: ConnectionHealth) -> None:
+        """Handle heartbeat from ESP32."""
+        uptime_seconds = health.esp32_uptime_ms / 1000
+        
+        if health.is_alive:
+            # Format uptime nicely
+            if uptime_seconds < 60:
+                uptime_str = f"{uptime_seconds:.0f}s"
+            elif uptime_seconds < 3600:
+                minutes = uptime_seconds / 60
+                uptime_str = f"{minutes:.1f}m"
+            else:
+                hours = uptime_seconds / 3600
+                uptime_str = f"{hours:.1f}h"
+            
+            self._heartbeat_card.set_value(f"● {uptime_str}", "connected")
+            
+            # Log occasionally (every 10 heartbeats)
+            if health.heartbeat_count % 10 == 0:
+                logger.debug(f"Heartbeat #{health.heartbeat_count}: uptime={uptime_str}")
+        else:
+            # Connection timeout detected
+            self._heartbeat_card.set_value("Perdido", "disconnected")
+            self._log_panel.add_message(
+                "⚠ Conexión perdida - sin heartbeat",
+                is_error=True
+            )
+            logger.warning("Heartbeat timeout - connection lost")
+    
+    def _on_acknowledgment_received(self, ack: AcknowledgmentInfo) -> None:
+        """Handle acknowledgment from ESP32."""
+        # Log acknowledgments for debugging (can be removed for production)
+        logger.debug(
+            f"✓ Command '{ack.received_type}' acknowledged "
+            f"(RTT: {ack.round_trip_ms:.1f}ms)"
+        )
     
     def _check_connected(self) -> bool:
         if not self._session_controller.is_connected:

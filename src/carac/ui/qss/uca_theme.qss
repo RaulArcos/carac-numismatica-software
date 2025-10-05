@@ -275,6 +275,12 @@ QLabel#titleLabel {
     padding: 5px 0;
 }
 
+QLabel#subtitleLabel {
+    color: #8C8984;
+    font-size: 10pt;
+    font-weight: 500;
+}
+
 QLabel#statusLabel {
     font-weight: 600;
     font-size: 10pt;
@@ -372,6 +378,34 @@ QToolTip {
     border-radius: 4px;
     padding: 6px 8px;
     font-size: 8pt;
+}
+
+/* Message Boxes */
+QMessageBox {
+    background-color: white;
+    color: #2c3e50;
+}
+
+QMessageBox QLabel {
+    color: #2c3e50;
+    font-size: 10pt;
+    background-color: transparent;
+}
+
+QMessageBox QPushButton {
+    min-width: 80px;
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #00607C, stop: 1 #004a63);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-weight: 600;
+}
+
+QMessageBox QPushButton:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #0072a3, stop: 1 #005580);
 }
 
 /* Connection Panel */
@@ -504,4 +538,18 @@ QLabel#ledStatusOn {
     font-weight: bold;
     border-radius: 10px;
     background-color: #DD7500;
+}
+
+QLabel#logTimestamp {
+    color: gray;
+}
+
+QLabel#logLevelInfo {
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+QLabel#logLevelError {
+    color: #DD7500;
+    font-weight: 500;
 }

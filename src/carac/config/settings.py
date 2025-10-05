@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     )
     
     default_baud_rate: int = Field(
-        default=9600,
-        description="Default baud rate for serial communication"
+        default=115200,
+        description="Default baud rate for serial communication (must match ESP32)"
     )
     default_timeout: float = Field(
         default=5.0,
@@ -22,6 +22,20 @@ class Settings(BaseSettings):
     max_retries: int = Field(
         default=3,
         description="Maximum number of retries for serial operations"
+    )
+    
+    # ESP32 Communication Constants
+    heartbeat_interval_ms: int = Field(
+        default=5000,
+        description="Expected heartbeat interval from ESP32 (milliseconds)"
+    )
+    heartbeat_timeout_ms: int = Field(
+        default=10000,
+        description="Heartbeat timeout threshold (milliseconds)"
+    )
+    firmware_version: str = Field(
+        default="1.0.0",
+        description="Expected ESP32 firmware version"
     )
     
     lighting_channels: list[str] = Field(

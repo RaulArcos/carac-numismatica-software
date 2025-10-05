@@ -47,7 +47,7 @@ class StyleManager:
         object_name = status_map.get(status.lower())
         if object_name:
             widget.setObjectName(object_name)
-            self._refresh_widget_style(widget)
+            self.refresh_widget_style(widget)
     
     def apply_system_info_style(self, widget, state: str) -> None:
         state_map = {
@@ -60,7 +60,7 @@ class StyleManager:
         object_name = state_map.get(state.lower())
         if object_name:
             widget.setObjectName(object_name)
-            self._refresh_widget_style(widget)
+            self.refresh_widget_style(widget)
     
     def apply_card_value_style(self, widget, state: str) -> None:
         state_map = {
@@ -76,7 +76,7 @@ class StyleManager:
         object_name = state_map.get(state.lower())
         if object_name:
             widget.setObjectName(object_name)
-            self._refresh_widget_style(widget)
+            self.refresh_widget_style(widget)
     
     def apply_button_style(self, widget, button_type: str) -> None:
         button_map = {
@@ -91,13 +91,13 @@ class StyleManager:
         object_name = button_map.get(button_type.lower())
         if object_name:
             widget.setObjectName(object_name)
-            self._refresh_widget_style(widget)
+            self.refresh_widget_style(widget)
     
     def set_card_title_style(self, widget) -> None:
         widget.setObjectName("cardTitle")
-        self._refresh_widget_style(widget)
+        self.refresh_widget_style(widget)
     
-    def _refresh_widget_style(self, widget) -> None:
+    def refresh_widget_style(self, widget) -> None:
         widget.style().unpolish(widget)
         widget.style().polish(widget)
         widget.update()

@@ -21,6 +21,13 @@ class PresetControlPanel(QGroupBox):
     preset_selected = Signal(str, dict)
     
     CUSTOM_PRESET_COUNT = 2
+    BUTTON_MIN_HEIGHT = 26
+    BUTTON_MAX_HEIGHT = 26
+    SAVE_BUTTON_MAX_WIDTH = 40
+    SAVE_ICON_SIZE = 18
+    LAYOUT_SPACING = 5
+    LAYOUT_MARGIN = 8
+    GRID_SPACING = 4
     
     def __init__(
         self,
@@ -36,16 +43,21 @@ class PresetControlPanel(QGroupBox):
     
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setSpacing(5)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(self.LAYOUT_SPACING)
+        layout.setContentsMargins(
+            self.LAYOUT_MARGIN,
+            self.LAYOUT_MARGIN,
+            self.LAYOUT_MARGIN,
+            self.LAYOUT_MARGIN
+        )
         
         preset_buttons_layout = QGridLayout()
-        preset_buttons_layout.setSpacing(4)
+        preset_buttons_layout.setSpacing(self.GRID_SPACING)
         
         for i, preset_name in enumerate(self._default_presets.keys()):
             btn = QPushButton(preset_name)
-            btn.setMinimumHeight(26)
-            btn.setMaximumHeight(26)
+            btn.setMinimumHeight(self.BUTTON_MIN_HEIGHT)
+            btn.setMaximumHeight(self.BUTTON_MAX_HEIGHT)
             style_manager.apply_button_style(btn, "secondary")
             btn.clicked.connect(lambda checked, name=preset_name: self._on_preset_clicked(name))
             preset_buttons_layout.addWidget(btn, i // 2, i % 2)
@@ -59,12 +71,12 @@ class PresetControlPanel(QGroupBox):
         
         for i in range(self.CUSTOM_PRESET_COUNT):
             custom_layout = QHBoxLayout()
-            custom_layout.setSpacing(4)
+            custom_layout.setSpacing(self.GRID_SPACING)
             
             preset_name = f"Custom {i + 1}"
             load_btn = QPushButton(preset_name)
-            load_btn.setMinimumHeight(26)
-            load_btn.setMaximumHeight(26)
+            load_btn.setMinimumHeight(self.BUTTON_MIN_HEIGHT)
+            load_btn.setMaximumHeight(self.BUTTON_MAX_HEIGHT)
             style_manager.apply_button_style(load_btn, "secondary")
             load_btn.clicked.connect(lambda checked, idx=i: self._on_custom_preset_clicked(idx))
             custom_layout.addWidget(load_btn, 2)
@@ -72,16 +84,16 @@ class PresetControlPanel(QGroupBox):
             
             save_btn = QPushButton()
             save_btn.setObjectName("savePresetButton")
-            save_btn.setMaximumWidth(40)
-            save_btn.setMinimumHeight(26)
-            save_btn.setMaximumHeight(26)
+            save_btn.setMaximumWidth(self.SAVE_BUTTON_MAX_WIDTH)
+            save_btn.setMinimumHeight(self.BUTTON_MIN_HEIGHT)
+            save_btn.setMaximumHeight(self.BUTTON_MAX_HEIGHT)
             save_btn.setToolTip(f"Guardar configuración actual en {preset_name}")
             save_btn.clicked.connect(lambda checked, idx=i: self._on_save_custom_preset(idx))
             
             icon_path = Path(__file__).parent.parent.parent.parent / "assets" / "ui" / "save_icon.svg"
             if icon_path.exists():
                 save_btn.setIcon(QIcon(str(icon_path)))
-                save_btn.setIconSize(QSize(18, 18))
+                save_btn.setIconSize(QSize(self.SAVE_ICON_SIZE, self.SAVE_ICON_SIZE))
             
             custom_layout.addWidget(save_btn)
             layout.addLayout(custom_layout)

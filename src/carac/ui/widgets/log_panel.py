@@ -17,6 +17,15 @@ from ..style_manager import style_manager
 
 
 class LogPanel(QGroupBox):
+    TIMESTAMP_FORMAT = "%H:%M:%S"
+    LEVEL_INFO = "INFO"
+    LEVEL_ERROR = "ERROR"
+    COLOR_TIMESTAMP = "gray"
+    COLOR_INFO = "#2c3e50"
+    COLOR_ERROR = "#DD7500"
+    MAX_LOG_HEIGHT = 600
+    BUTTON_HEIGHT = 26
+    
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__("Registro", parent)
         self._setup_ui()
@@ -30,20 +39,20 @@ class LogPanel(QGroupBox):
         self._log_text.setObjectName("logText")
         self._log_text.setReadOnly(True)
         self._log_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self._log_text.setMaximumHeight(600)
+        self._log_text.setMaximumHeight(self.MAX_LOG_HEIGHT)
         layout.addWidget(self._log_text)
         
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(4)
         
         clear_button = QPushButton("Limpiar")
-        clear_button.setMaximumHeight(26)
+        clear_button.setMaximumHeight(self.BUTTON_HEIGHT)
         style_manager.apply_button_style(clear_button, "secondary")
         clear_button.clicked.connect(self.clear)
         buttons_layout.addWidget(clear_button)
         
         save_button = QPushButton("Guardar")
-        save_button.setMaximumHeight(26)
+        save_button.setMaximumHeight(self.BUTTON_HEIGHT)
         style_manager.apply_button_style(save_button, "secondary")
         save_button.clicked.connect(self.save)
         buttons_layout.addWidget(save_button)
@@ -51,12 +60,12 @@ class LogPanel(QGroupBox):
         layout.addLayout(buttons_layout)
     
     def add_message(self, message: str, is_error: bool = False) -> None:
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        level = "ERROR" if is_error else "INFO"
-        color = "#DD7500" if is_error else "#2c3e50"
+        timestamp = datetime.now().strftime(self.TIMESTAMP_FORMAT)
+        level = self.LEVEL_ERROR if is_error else self.LEVEL_INFO
+        color = self.COLOR_ERROR if is_error else self.COLOR_INFO
         
         log_entry = (
-            f'<span style="color: gray;">[{timestamp}]</span> '
+            f'<span style="color: {self.COLOR_TIMESTAMP};">[{timestamp}]</span> '
             f'<span style="color: {color}; font-weight: 500;">{level}:</span> '
             f'<span style="color: {color};">{message}</span>'
         )

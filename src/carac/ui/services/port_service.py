@@ -14,22 +14,24 @@ class PortRefreshThread(QThread):
 
 
 class PortService:
-    @staticmethod
-    def get_available_ports() -> List[str]:
+    ARDUINO_ANNOTATION = " (Arduino)"
+    
+    @classmethod
+    def get_available_ports(cls) -> List[str]:
         return get_available_ports()
     
-    @staticmethod
-    def get_arduino_ports() -> List[str]:
+    @classmethod
+    def get_arduino_ports(cls) -> List[str]:
         return get_arduino_ports()
     
-    @staticmethod
-    def annotate_arduino_ports(ports: List[str]) -> List[str]:
-        arduino_ports = get_arduino_ports()
+    @classmethod
+    def annotate_arduino_ports(cls, ports: List[str]) -> List[str]:
+        arduino_ports = cls.get_arduino_ports()
         return [
-            f"{port} (Arduino)" if port in arduino_ports else port
+            f"{port}{cls.ARDUINO_ANNOTATION}" if port in arduino_ports else port
             for port in ports
         ]
     
-    @staticmethod
-    def clean_port_name(port: str) -> str:
-        return port.replace(" (Arduino)", "")
+    @classmethod
+    def clean_port_name(cls, port: str) -> str:
+        return port.replace(cls.ARDUINO_ANNOTATION, "")

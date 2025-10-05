@@ -18,6 +18,16 @@ from .cylinder_visualization import CylinderVisualization
 class LightingControl(QFrame):
     value_changed = Signal(int)
     
+    VALUE_LABEL_MIN_WIDTH = 30
+    RING_INDICATOR_WIDTH = 36
+    NORMALIZED_INPUT_WIDTH = 50
+    SLIDER_MIN_HEIGHT = 20
+    LAYOUT_SPACING_SMALL = 2
+    LAYOUT_SPACING_MEDIUM = 6
+    LAYOUT_MARGIN = 4
+    MAX_INTENSITY = 255
+    SLIDER_MAX = 100
+    
     def __init__(
         self,
         ring_name: str,
@@ -32,8 +42,13 @@ class LightingControl(QFrame):
         self.setObjectName("lightingControlFrame")
         
         layout = QVBoxLayout(self)
-        layout.setSpacing(2)
-        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(self.LAYOUT_SPACING_SMALL)
+        layout.setContentsMargins(
+            self.LAYOUT_MARGIN,
+            self.LAYOUT_MARGIN,
+            self.LAYOUT_MARGIN,
+            self.LAYOUT_MARGIN
+        )
         
         header_layout = QHBoxLayout()
         name_label = QLabel(ring_name)
@@ -41,31 +56,31 @@ class LightingControl(QFrame):
         header_layout.addWidget(name_label)
         
         self._value_label = QLabel("0")
-        self._value_label.setMinimumWidth(30)
+        self._value_label.setMinimumWidth(self.VALUE_LABEL_MIN_WIDTH)
         self._value_label.setAlignment(Qt.AlignRight)
         self._value_label.setObjectName("ringValueLabel")
         header_layout.addWidget(self._value_label)
         layout.addLayout(header_layout)
         
         slider_layout = QHBoxLayout()
-        slider_layout.setSpacing(6)
+        slider_layout.setSpacing(self.LAYOUT_SPACING_MEDIUM)
         
         ring_indicator = QLabel(f"R{self._ring_number}")
         ring_indicator.setObjectName("ringIndicator")
         ring_indicator.setAlignment(Qt.AlignCenter)
-        ring_indicator.setFixedWidth(36)
+        ring_indicator.setFixedWidth(self.RING_INDICATOR_WIDTH)
         slider_layout.addWidget(ring_indicator)
         
         self._slider = QSlider(Qt.Horizontal)
-        self._slider.setRange(0, 100)
+        self._slider.setRange(0, self.SLIDER_MAX)
         self._slider.setValue(0)
-        self._slider.setMinimumHeight(20)
+        self._slider.setMinimumHeight(self.SLIDER_MIN_HEIGHT)
         self._slider.valueChanged.connect(self._on_slider_changed)
         slider_layout.addWidget(self._slider)
         
         self._normalized_input = QLineEdit("0.00")
-        self._normalized_input.setMinimumWidth(50)
-        self._normalized_input.setMaximumWidth(50)
+        self._normalized_input.setMinimumWidth(self.NORMALIZED_INPUT_WIDTH)
+        self._normalized_input.setMaximumWidth(self.NORMALIZED_INPUT_WIDTH)
         self._normalized_input.setAlignment(Qt.AlignCenter)
         self._normalized_input.setObjectName("normalizedInput")
         self._normalized_input.setToolTip("Valor normalizado (0.00 - 1.00)")
@@ -75,8 +90,8 @@ class LightingControl(QFrame):
         layout.addLayout(slider_layout)
     
     def _on_slider_changed(self, value: int) -> None:
-        normalized = value / 100.0
-        intensity_255 = int(normalized * 255)
+        normalized = value / self.SLIDER_MAX
+        intensity_255 = int(normalized * self.MAX_INTENSITY)
         
         self._value_label.setText(str(intensity_255))
         
@@ -93,23 +108,23 @@ class LightingControl(QFrame):
             
             self._normalized_input.setText(f"{value:.2f}")
             
-            slider_value = int(value * 100)
+            slider_value = int(value * self.SLIDER_MAX)
             self._slider.blockSignals(True)
             self._slider.setValue(slider_value)
             self._slider.blockSignals(False)
             
-            intensity_255 = int(value * 255)
+            intensity_255 = int(value * self.MAX_INTENSITY)
             self._value_label.setText(str(intensity_255))
             self.value_changed.emit(intensity_255)
         except ValueError:
             slider_value = self._slider.value()
-            normalized = slider_value / 100.0
+            normalized = slider_value / self.SLIDER_MAX
             self._normalized_input.setText(f"{normalized:.2f}")
     
     def set_value(self, intensity: int) -> None:
-        intensity = max(0, min(255, intensity))
-        value_0_100 = int((intensity / 255.0) * 100)
-        normalized = intensity / 255.0
+        intensity = max(0, min(self.MAX_INTENSITY, intensity))
+        value_0_100 = int((intensity / self.MAX_INTENSITY) * self.SLIDER_MAX)
+        normalized = intensity / self.MAX_INTENSITY
         
         self._slider.blockSignals(True)
         self._slider.setValue(value_0_100)
@@ -122,7 +137,7 @@ class LightingControl(QFrame):
         self._normalized_input.blockSignals(False)
     
     def get_value(self) -> int:
-        return int(self._slider.value() / 100.0 * 255)
+        return int(self._slider.value() / self.SLIDER_MAX * self.MAX_INTENSITY)
 
 
 class LightingControlPanel(QGroupBox):
