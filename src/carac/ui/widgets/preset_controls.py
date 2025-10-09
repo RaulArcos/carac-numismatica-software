@@ -1,18 +1,17 @@
-from typing import Dict
+from pathlib import Path
 
+from PySide6.QtCore import QSize, Signal
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
-    QGroupBox,
-    QVBoxLayout,
-    QHBoxLayout,
     QGridLayout,
-    QPushButton,
+    QGroupBox,
+    QHBoxLayout,
     QLabel,
     QMessageBox,
+    QPushButton,
+    QVBoxLayout,
     QWidget,
 )
-from PySide6.QtCore import Signal, QSize
-from PySide6.QtGui import QIcon
-from pathlib import Path
 
 from ..style_manager import style_manager
 
@@ -31,13 +30,13 @@ class PresetControlPanel(QGroupBox):
     
     def __init__(
         self,
-        default_presets: Dict[str, Dict[str, int]],
+        default_presets: dict[str, dict[str, int]],
         parent: QWidget | None = None
     ) -> None:
         super().__init__("Perfiles de Iluminación", parent)
         self._default_presets = default_presets
-        self._custom_presets: list[Dict[str, int]] = [{}, {}]
-        self._preset_buttons: Dict[str, QPushButton] = {}
+        self._custom_presets: list[dict[str, int]] = [{}, {}]
+        self._preset_buttons: dict[str, QPushButton] = {}
         self._selected_preset: str | None = None
         self._setup_ui()
     
@@ -125,7 +124,7 @@ class PresetControlPanel(QGroupBox):
             f"Perfil Custom {index + 1} guardado exitosamente"
         )
     
-    def save_custom_preset(self, index: int, values: Dict[str, int]) -> None:
+    def save_custom_preset(self, index: int, values: dict[str, int]) -> None:
         if 0 <= index < self.CUSTOM_PRESET_COUNT:
             self._custom_presets[index] = values.copy()
     

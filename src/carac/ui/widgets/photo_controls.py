@@ -1,14 +1,14 @@
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QGroupBox,
-    QVBoxLayout,
-    QHBoxLayout,
-    QGridLayout,
-    QPushButton,
-    QLabel,
     QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
     QWidget,
 )
-from PySide6.QtCore import Signal, Qt
 
 from ..style_manager import style_manager
 
@@ -140,5 +140,4 @@ class PhotoControlPanel(QGroupBox):
         style_manager.refresh_widget_style(self._led_status_label)
     
     def set_system_info(self, text: str, state: str = "normal") -> None:
-        """Set system info - currently unused, kept for backwards compatibility."""
         pass

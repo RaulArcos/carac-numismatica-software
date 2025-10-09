@@ -1,16 +1,14 @@
-from typing import Dict, Callable
-
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QFrame,
     QGroupBox,
     QHBoxLayout,
-    QVBoxLayout,
     QLabel,
-    QSlider,
     QLineEdit,
-    QFrame,
+    QSlider,
+    QVBoxLayout,
     QWidget,
 )
-from PySide6.QtCore import Qt, Signal
 
 from .cylinder_visualization import CylinderVisualization
 
@@ -150,7 +148,7 @@ class LightingControlPanel(QGroupBox):
     ) -> None:
         super().__init__("Iluminación Cilíndrica", parent)
         self._channels = channels
-        self._controls: Dict[str, LightingControl] = {}
+        self._controls: dict[str, LightingControl] = {}
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -193,7 +191,7 @@ class LightingControlPanel(QGroupBox):
             ring_index = self._channels.index(channel)
             self._cylinder_viz.set_ring_intensity(ring_index, intensity)
     
-    def set_all_values(self, values: Dict[str, int]) -> None:
+    def set_all_values(self, values: dict[str, int]) -> None:
         for channel, intensity in values.items():
             self.set_channel_value(channel, intensity)
     
@@ -202,5 +200,5 @@ class LightingControlPanel(QGroupBox):
             return self._controls[channel].get_value()
         return 0
     
-    def get_all_values(self) -> Dict[str, int]:
+    def get_all_values(self) -> dict[str, int]:
         return {channel: control.get_value() for channel, control in self._controls.items()}

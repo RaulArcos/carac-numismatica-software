@@ -1,17 +1,15 @@
 from datetime import datetime
-from pathlib import Path
 
 from PySide6.QtWidgets import (
+    QFileDialog,
     QGroupBox,
-    QVBoxLayout,
     QHBoxLayout,
     QPushButton,
-    QTextEdit,
     QSizePolicy,
-    QFileDialog,
+    QTextEdit,
+    QVBoxLayout,
     QWidget,
 )
-from PySide6.QtCore import Signal
 
 from ..style_manager import style_manager
 

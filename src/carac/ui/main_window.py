@@ -1,33 +1,32 @@
 from pathlib import Path
 
-from PySide6.QtWidgets import (
-    QMainWindow,
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QMessageBox,
-)
+from loguru import logger
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QIcon
-
-from loguru import logger
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..config.settings import settings
 from ..controllers.session_controller import SessionController
-from ..protocol.models import ConnectionStatus, Response, Message
-from ..serialio.connection_monitor import ConnectionHealth, AcknowledgmentInfo
+from ..protocol.models import ConnectionStatus, Message, Response
+from ..serialio.connection_monitor import AcknowledgmentInfo, ConnectionHealth
+from .services import PortService, PresetService
+from .services.port_service import PortRefreshThread
 from .style_manager import style_manager
 from .widgets import (
-    StatusCard,
     ConnectionPanel,
     LightingControlPanel,
-    PresetControlPanel,
-    PhotoControlPanel,
     LogPanel,
+    PhotoControlPanel,
+    PresetControlPanel,
+    StatusCard,
 )
-from .services import PresetService, PortService
-from .services.port_service import PortRefreshThread
 
 
 class MainWindow(QMainWindow):
@@ -44,22 +43,24 @@ class MainWindow(QMainWindow):
     LAYOUT_SPACING = 10
     HEADER_SPACING = 15
     STATUS_CARD_SPACING = 8
-    
+
     def __init__(self) -> None:
         super().__init__()
-        
+
         self._session_controller = SessionController()
         self._port_refresh_timer = QTimer()
         self._port_refresh_thread = PortRefreshThread()
-        
+
+        self._initialize_window()
+        logger.info("Main window initialized")
+
+    def _initialize_window(self) -> None:
         self._setup_window()
         self._setup_ui()
         self._setup_connections()
         self._setup_session_callbacks()
         self._start_port_refresh()
         self._apply_styles()
-        
-        logger.info("Main window initialized")
     
     def _setup_window(self) -> None:
         self.setWindowTitle(self.WINDOW_TITLE)
@@ -77,14 +78,19 @@ class MainWindow(QMainWindow):
             Path(__file__).parent.parent.parent / "assets" / "ui" / "logo.png",
             Path.cwd() / "assets" / "ui" / "logo.png",
         ]
-        
+
         for icon_path in icon_paths:
-            if icon_path.exists():
-                self.setWindowIcon(QIcon(str(icon_path)))
-                logger.info(f"Application icon loaded from: {icon_path}")
+            if self._try_load_icon(icon_path):
                 return
-        
+
         logger.warning("Application icon not found")
+
+    def _try_load_icon(self, icon_path: Path) -> bool:
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
+            logger.info(f"Application icon loaded from: {icon_path}")
+            return True
+        return False
     
     def _setup_ui(self) -> None:
         central_widget = QWidget()
@@ -252,12 +258,14 @@ class MainWindow(QMainWindow):
         if not port:
             QMessageBox.warning(self, "Error", "Por favor selecciona un puerto")
             return
-        
+
         port = PortService.clean_port_name(port)
         self._log_panel.add_message(f"Conectando a {port}...")
-        
+
         success = self._session_controller.connect(port, settings.default_baud_rate)
-        
+        self._log_connection_result(success)
+
+    def _log_connection_result(self, success: bool) -> None:
         if success:
             self._log_panel.add_message("Conectado exitosamente")
         else:
@@ -301,7 +309,6 @@ class MainWindow(QMainWindow):
         self._log_panel.add_message(f"Perfil '{preset_name}' aplicado")
     
     def _on_position_forward(self) -> None:
-        """Handle motor position forward button."""
         if not self._check_connected():
             return
         self._log_panel.add_message("Moviendo posición hacia adelante...")
@@ -312,7 +319,6 @@ class MainWindow(QMainWindow):
             self._log_panel.add_message("Error al mover posición", is_error=True)
     
     def _on_position_backward(self) -> None:
-        """Handle motor position backward button."""
         if not self._check_connected():
             return
         self._log_panel.add_message("Moviendo posición hacia atrás...")
@@ -323,7 +329,6 @@ class MainWindow(QMainWindow):
             self._log_panel.add_message("Error al mover posición", is_error=True)
     
     def _on_flip_coin(self) -> None:
-        """Handle flip coin button."""
         if not self._check_connected():
             return
         self._log_panel.add_message("Volteando moneda...")
@@ -334,7 +339,6 @@ class MainWindow(QMainWindow):
             self._log_panel.add_message("Error al voltear moneda", is_error=True)
     
     def _on_take_photo(self) -> None:
-        """Handle take photo button."""
         if not self._check_connected():
             return
         self._log_panel.add_message("Tomando fotografía...")
@@ -373,7 +377,6 @@ class MainWindow(QMainWindow):
             self._log_panel.add_message("Error al alternar LED de prueba", is_error=True)
     
     def _on_emergency_stop(self) -> None:
-        """Handle emergency stop button."""
         if not self._check_connected():
             return
         
@@ -387,7 +390,6 @@ class MainWindow(QMainWindow):
             self._log_panel.add_message("Error en paro de emergencia", is_error=True)
     
     def _on_arduino_response(self, response: Response) -> None:
-        """Handle async responses from ESP32."""
         if response.data and 'led_state' in response.data:
             led_state = response.data['led_state']
             self._photo_panel.set_led_status(led_state)
@@ -400,15 +402,13 @@ class MainWindow(QMainWindow):
             self._arduino_card.set_value("Error", "disconnected")
     
     def _on_esp32_event(self, event) -> None:
-        """Handle async events from ESP32."""
-        from ..protocol.models import MessageType, Message
+        from ..protocol.models import Message, MessageType
         
         if not isinstance(event, Message):
             return
         
         logger.info(f"ESP32 Event: {event.type}")
         
-        # Handle sequence events
         if event.type == MessageType.EVENT_SEQUENCE_STARTED:
             total = event.payload.get("total_photos", 0)
             self._log_panel.add_message(f"Secuencia iniciada: {total} fotos")
@@ -446,37 +446,39 @@ class MainWindow(QMainWindow):
             self._log_panel.add_message(f"Motor en posición: {position}")
     
     def _on_heartbeat_received(self, health: ConnectionHealth) -> None:
-        """Handle heartbeat from ESP32."""
-        uptime_seconds = health.esp32_uptime_ms / 1000
-        
         if health.is_alive:
-            # Format uptime nicely
-            if uptime_seconds < 60:
-                uptime_str = f"{uptime_seconds:.0f}s"
-            elif uptime_seconds < 3600:
-                minutes = uptime_seconds / 60
-                uptime_str = f"{minutes:.1f}m"
-            else:
-                hours = uptime_seconds / 3600
-                uptime_str = f"{hours:.1f}h"
-            
-            self._heartbeat_card.set_value(f"● {uptime_str}", "connected")
-            
-            # Log occasionally (every 10 heartbeats)
-            if health.heartbeat_count % 10 == 0:
-                logger.debug(f"Heartbeat #{health.heartbeat_count}: uptime={uptime_str}")
+            self._handle_alive_heartbeat(health)
         else:
-            # Connection timeout detected
-            self._heartbeat_card.set_value("Perdido", "disconnected")
-            self._log_panel.add_message(
-                "⚠ Conexión perdida - sin heartbeat",
-                is_error=True
-            )
-            logger.warning("Heartbeat timeout - connection lost")
+            self._handle_lost_heartbeat()
+
+    def _handle_alive_heartbeat(self, health: ConnectionHealth) -> None:
+        uptime_str = self._format_uptime(health.esp32_uptime_ms)
+        self._heartbeat_card.set_value(f"● {uptime_str}", "connected")
+
+        if health.heartbeat_count % 10 == 0:
+            logger.debug(f"Heartbeat #{health.heartbeat_count}: uptime={uptime_str}")
+
+    def _handle_lost_heartbeat(self) -> None:
+        self._heartbeat_card.set_value("Perdido", "disconnected")
+        self._log_panel.add_message(
+            "⚠ Conexión perdida - sin heartbeat",
+            is_error=True
+        )
+        logger.warning("Heartbeat timeout - connection lost")
+
+    def _format_uptime(self, uptime_ms: int) -> str:
+        uptime_seconds = uptime_ms / 1000
+
+        if uptime_seconds < 60:
+            return f"{uptime_seconds:.0f}s"
+        elif uptime_seconds < 3600:
+            minutes = uptime_seconds / 60
+            return f"{minutes:.1f}m"
+        else:
+            hours = uptime_seconds / 3600
+            return f"{hours:.1f}h"
     
     def _on_acknowledgment_received(self, ack: AcknowledgmentInfo) -> None:
-        """Handle acknowledgment from ESP32."""
-        # Log acknowledgments for debugging (can be removed for production)
         logger.debug(
             f"✓ Command '{ack.received_type}' acknowledged "
             f"(RTT: {ack.round_trip_ms:.1f}ms)"
@@ -489,12 +491,17 @@ class MainWindow(QMainWindow):
         return True
     
     def closeEvent(self, event) -> None:
+        self._cleanup()
+        event.accept()
+
+    def _cleanup(self) -> None:
         if self._session_controller.is_connected:
             self._session_controller.disconnect()
-        
+
+        self._stop_port_refresh()
+
+    def _stop_port_refresh(self) -> None:
         self._port_refresh_timer.stop()
         if self._port_refresh_thread.isRunning():
             self._port_refresh_thread.quit()
             self._port_refresh_thread.wait()
-        
-        event.accept()

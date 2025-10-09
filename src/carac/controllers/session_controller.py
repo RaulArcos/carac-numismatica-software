@@ -3,9 +3,9 @@ from dataclasses import dataclass
 from loguru import logger
 
 from ..config.settings import settings
+from ..protocol.models import ConnectionStatus, Message, Response
 from ..serialio.arduino_client import ArduinoClient
-from ..serialio.connection_monitor import ConnectionHealth, AcknowledgmentInfo
-from ..protocol.models import Response, ConnectionStatus, Message
+from ..serialio.connection_monitor import AcknowledgmentInfo, ConnectionHealth
 from .callback_manager import CallbackManager
 
 
@@ -26,28 +26,33 @@ class SessionController:
         self._event_callbacks = CallbackManager[Message]()
         self._heartbeat_callbacks = CallbackManager[ConnectionHealth]()
         self._ack_callbacks = CallbackManager[AcknowledgmentInfo]()
-        
+
         self._initialize_lighting_states()
+        self._register_arduino_callbacks()
+
+    def _initialize_lighting_states(self) -> None:
+        for channel in settings.lighting_channels:
+            self._lighting_states[channel] = LightingState(channel=channel)
+
+    def _register_arduino_callbacks(self) -> None:
         self._arduino_client.set_response_callback(self._handle_response)
         self._arduino_client.set_event_callback(self._handle_event)
         self._arduino_client.set_heartbeat_callback(self._handle_heartbeat)
         self._arduino_client.set_ack_callback(self._handle_acknowledgment)
     
-    def _initialize_lighting_states(self) -> None:
-        for channel in settings.lighting_channels:
-            self._lighting_states[channel] = LightingState(channel=channel)
-    
     def connect(self, port: str, baud_rate: int | None = None) -> bool:
         success = self._arduino_client.connect(port, baud_rate)
         self._update_connection_status(self._arduino_client.status)
-        
+
+        self._log_connection_result(success, port)
+        return success
+
+    def _log_connection_result(self, success: bool, port: str) -> None:
         if success:
             logger.info(f"Connected to Arduino on {port}")
         else:
             logger.error(f"Failed to connect to Arduino on {port}")
-        
-        return success
-    
+
     def disconnect(self) -> None:
         self._arduino_client.disconnect()
         self._update_connection_status(ConnectionStatus.DISCONNECTED)
@@ -57,18 +62,31 @@ class SessionController:
         if not self._arduino_client.is_connected:
             logger.warning("Not connected to Arduino")
             return False
-        
+
         if channel not in self._lighting_states:
             logger.error(f"Unknown lighting channel: {channel}")
             return False
-        
-        intensity = max(0, min(intensity, settings.max_lighting_intensity))
-        
+
+        intensity = self._clamp_intensity(intensity)
+        self._update_lighting_state(channel, intensity)
+
+        response = self._arduino_client.set_lighting(channel, intensity)
+
+        return self._handle_lighting_response(response, channel, intensity)
+
+    def _clamp_intensity(self, intensity: int) -> int:
+        return max(0, min(intensity, settings.max_lighting_intensity))
+
+    def _update_lighting_state(self, channel: str, intensity: int) -> None:
         self._lighting_states[channel].intensity = intensity
         self._lighting_states[channel].enabled = intensity > 0
-        
-        response = self._arduino_client.set_lighting(channel, intensity)
-        
+
+    def _handle_lighting_response(
+        self,
+        response: Response | None,
+        channel: str,
+        intensity: int
+    ) -> bool:
         if response and response.success:
             logger.info(f"Set {channel} lighting to {intensity}")
             return True
@@ -90,12 +108,20 @@ class SessionController:
         if not self._arduino_client.is_connected:
             logger.warning("Not connected to Arduino")
             return False
-        
+
         count = count or settings.photo_sequence_count
         delay = delay or settings.photo_sequence_delay
-        
+
         response = self._arduino_client.start_photo_sequence(count, delay)
-        
+
+        return self._handle_photo_sequence_response(response, count, delay)
+
+    def _handle_photo_sequence_response(
+        self,
+        response: Response | None,
+        count: int,
+        delay: float
+    ) -> bool:
         if response and response.success:
             logger.info(f"Started photo sequence: {count} photos, {delay}s delay")
             return True
@@ -117,102 +143,82 @@ class SessionController:
         return self._arduino_client.get_status()
     
     def toggle_led(self) -> Response | None:
-        """Toggle built-in LED for testing."""
         if not self._arduino_client.is_connected:
             logger.warning("Not connected to ESP32")
             return None
-        
+
         response = self._arduino_client.toggle_led()
-        
+
         if response and response.success:
             logger.info("LED toggled successfully")
             return response
         else:
             logger.error("Failed to toggle LED")
             return None
-    
+
     def motor_position(self, direction: str, steps: int | None = None) -> bool:
-        """Move positioning motor forward or backward."""
-        if not self._arduino_client.is_connected:
-            logger.warning("Not connected to ESP32")
-            return False
-        
-        response = self._arduino_client.motor_position(direction, steps)
-        
-        if response and response.success:
-            logger.info(f"Motor moved {direction}")
-            return True
-        else:
-            logger.error(f"Failed to move motor {direction}")
-            return False
-    
+        return self._execute_command(
+            lambda: self._arduino_client.motor_position(direction, steps),
+            f"Motor moved {direction}",
+            f"Failed to move motor {direction}"
+        )
+
     def motor_flip(self) -> bool:
-        """Flip the coin."""
-        if not self._arduino_client.is_connected:
-            logger.warning("Not connected to ESP32")
-            return False
-        
-        response = self._arduino_client.motor_flip()
-        
-        if response and response.success:
-            logger.info("Coin flipped successfully")
-            return True
-        else:
-            logger.error("Failed to flip coin")
-            return False
-    
+        return self._execute_command(
+            self._arduino_client.motor_flip,
+            "Coin flipped successfully",
+            "Failed to flip coin"
+        )
+
     def camera_trigger(self, duration: int | None = None) -> bool:
-        """Trigger camera shutter."""
-        if not self._arduino_client.is_connected:
-            logger.warning("Not connected to ESP32")
-            return False
-        
-        response = self._arduino_client.camera_trigger(duration)
-        
-        if response and response.success:
-            logger.info("Camera triggered successfully")
-            return True
-        else:
-            logger.error("Failed to trigger camera")
-            return False
-    
+        return self._execute_command(
+            lambda: self._arduino_client.camera_trigger(duration),
+            "Camera triggered successfully",
+            "Failed to trigger camera"
+        )
+
     def emergency_stop(self) -> bool:
-        """Emergency stop - halt all operations."""
+        return self._execute_command(
+            self._arduino_client.emergency_stop,
+            "Emergency stop executed",
+            "Failed to execute emergency stop"
+        )
+
+    def _execute_command(
+        self,
+        command_func,
+        success_msg: str,
+        error_msg: str
+    ) -> bool:
         if not self._arduino_client.is_connected:
             logger.warning("Not connected to ESP32")
             return False
-        
-        response = self._arduino_client.emergency_stop()
-        
+
+        response = command_func()
+
         if response and response.success:
-            logger.info("Emergency stop executed")
+            logger.info(success_msg)
             return True
         else:
-            logger.error("Failed to execute emergency stop")
+            logger.error(error_msg)
             return False
     
     def add_status_callback(self, callback) -> None:
-        """Add callback for connection status changes."""
         self._status_callbacks.add(callback)
     
     def add_response_callback(self, callback) -> None:
-        """Add callback for async responses."""
         self._response_callbacks.add(callback)
     
     def add_event_callback(self, callback) -> None:
-        """Add callback for async events from ESP32."""
         self._event_callbacks.add(callback)
     
     def add_heartbeat_callback(self, callback) -> None:
-        """Add callback for heartbeat events."""
         self._heartbeat_callbacks.add(callback)
     
     def add_ack_callback(self, callback) -> None:
-        """Add callback for acknowledgment events."""
         self._ack_callbacks.add(callback)
     
     def get_connection_health(self) -> ConnectionHealth:
-        """Get current connection health status."""
         return self._arduino_client.get_connection_health()
     
     def _handle_response(self, response: Response) -> None:
@@ -224,12 +230,10 @@ class SessionController:
         self._event_callbacks.notify(event)
     
     def _handle_heartbeat(self, health: ConnectionHealth) -> None:
-        """Handle heartbeat from ESP32."""
         logger.debug(f"Heartbeat received - alive: {health.is_alive}, uptime: {health.esp32_uptime_ms}ms")
         self._heartbeat_callbacks.notify(health)
     
     def _handle_acknowledgment(self, ack: AcknowledgmentInfo) -> None:
-        """Handle acknowledgment from ESP32."""
         logger.debug(f"ACK received - type: {ack.received_type}, RTT: {ack.round_trip_ms:.1f}ms")
         self._ack_callbacks.notify(ack)
     

@@ -1,5 +1,4 @@
-from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel, QSizePolicy, QWidget
-from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QFrame, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from ..style_manager import style_manager
 

@@ -6,7 +6,6 @@ from carac.logging_config import setup_logging
 from carac.ui.main_window import MainWindow
 from carac.version import __version__
 
-
 APPLICATION_NAME = "Carac"
 ORGANIZATION_NAME = "Carac Numismatic Software"
 

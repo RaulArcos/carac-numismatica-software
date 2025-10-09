@@ -10,85 +10,39 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
-    
-    default_baud_rate: int = Field(
-        default=115200,
-        description="Default baud rate for serial communication (must match ESP32)"
-    )
-    default_timeout: float = Field(
-        default=5.0,
-        description="Default timeout for serial operations"
-    )
-    max_retries: int = Field(
-        default=3,
-        description="Maximum number of retries for serial operations"
-    )
-    
-    # ESP32 Communication Constants
-    heartbeat_interval_ms: int = Field(
-        default=5000,
-        description="Expected heartbeat interval from ESP32 (milliseconds)"
-    )
-    heartbeat_timeout_ms: int = Field(
-        default=10000,
-        description="Heartbeat timeout threshold (milliseconds)"
-    )
-    firmware_version: str = Field(
-        default="1.0.0",
-        description="Expected ESP32 firmware version"
-    )
-    
-    lighting_channels: list[str] = Field(
-        default=["ring1", "ring2", "ring3", "ring4"],
-        description="Available lighting channels (4 vertical LED rings)"
-    )
-    max_lighting_intensity: int = Field(
-        default=255,
-        description="Maximum lighting intensity value"
-    )
-    
-    window_width: int = Field(
-        default=800,
-        description="Default window width"
-    )
-    window_height: int = Field(
-        default=600,
-        description="Default window height"
-    )
-    theme: str = Field(
-        default="light",
-        description="UI theme (light/dark)"
-    )
-    
-    log_level: str = Field(
-        default="DEBUG",
-        description="Logging level"
-    )
-    log_to_file: bool = Field(
-        default=True,
-        description="Enable file logging"
-    )
-    log_retention_days: int = Field(
-        default=30,
-        description="Log file retention in days"
-    )
-    
-    photo_sequence_delay: float = Field(
-        default=1.0,
-        description="Delay between photos in sequence"
-    )
-    photo_sequence_count: int = Field(
-        default=5,
-        description="Number of photos in sequence"
-    )
-    
+
+    default_baud_rate: int = Field(default=115200)
+    default_timeout: float = Field(default=5.0)
+    max_retries: int = Field(default=3)
+
+    heartbeat_interval_ms: int = Field(default=5000)
+    heartbeat_timeout_ms: int = Field(default=10000)
+    firmware_version: str = Field(default="1.0.0")
+
+    lighting_channels: list[str] = Field(default=["ring1", "ring2", "ring3", "ring4"])
+    max_lighting_intensity: int = Field(default=255)
+
+    window_width: int = Field(default=800)
+    window_height: int = Field(default=600)
+    theme: str = Field(default="light")
+
+    log_level: str = Field(default="DEBUG")
+    log_to_file: bool = Field(default=True)
+    log_retention_days: int = Field(default=30)
+
+    photo_sequence_delay: float = Field(default=1.0)
+    photo_sequence_count: int = Field(default=5)
+
     @property
     def log_directory(self) -> Path:
-        return Path.home() / ".carac" / "logs"
-    
+        return self._get_user_directory("logs")
+
     @property
     def config_directory(self) -> Path:
-        return Path.home() / ".carac" / "config"
+        return self._get_user_directory("config")
+
+    def _get_user_directory(self, subdirectory: str) -> Path:
+        return Path.home() / ".carac" / subdirectory
 
 
 settings = Settings()

@@ -1,8 +1,6 @@
-from typing import List
-
-from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import QPointF
-from PySide6.QtGui import QPainter, QColor, QPen, QBrush, QPolygonF
+from PySide6.QtGui import QBrush, QColor, QPainter, QPen, QPolygonF
+from PySide6.QtWidgets import QWidget
 
 
 class CylinderVisualization(QWidget):
@@ -16,14 +14,14 @@ class CylinderVisualization(QWidget):
         super().__init__(parent)
         self.setMinimumSize(self.MIN_WIDTH, self.MIN_HEIGHT)
         self.setMaximumSize(self.MAX_WIDTH, self.MAX_HEIGHT)
-        self._ring_intensities: List[int] = [0] * self.RING_COUNT
+        self._ring_intensities: list[int] = [0] * self.RING_COUNT
         
     def set_ring_intensity(self, ring_index: int, intensity: int) -> None:
         if 0 <= ring_index < self.RING_COUNT:
             self._ring_intensities[ring_index] = max(0, min(255, intensity))
             self.update()
     
-    def set_all_intensities(self, intensities: List[int]) -> None:
+    def set_all_intensities(self, intensities: list[int]) -> None:
         for index, intensity in enumerate(intensities[:self.RING_COUNT]):
             self.set_ring_intensity(index, intensity)
     

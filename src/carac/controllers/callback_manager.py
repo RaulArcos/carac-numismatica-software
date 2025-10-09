@@ -1,4 +1,5 @@
-from typing import Callable, TypeVar, Generic
+from typing import Callable, Generic, TypeVar
+
 from loguru import logger
 
 T = TypeVar("T")
@@ -25,4 +26,3 @@ class CallbackManager(Generic[T]):
     
     def clear(self) -> None:
         self._callbacks.clear()
-

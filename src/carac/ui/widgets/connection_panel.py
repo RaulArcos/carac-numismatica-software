@@ -1,14 +1,5 @@
-from PySide6.QtWidgets import (
-    QFrame,
-    QHBoxLayout,
-    QComboBox,
-    QPushButton,
-    QWidget,
-)
-from PySide6.QtCore import Signal, QSize
-from PySide6.QtGui import QIcon
-
-from typing import List
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QComboBox, QFrame, QHBoxLayout, QPushButton, QWidget
 
 
 class ConnectionPanel(QFrame):
@@ -60,7 +51,7 @@ class ConnectionPanel(QFrame):
         self._connect_button.clicked.connect(self.connection_toggle_requested.emit)
         layout.addWidget(self._connect_button)
     
-    def set_ports(self, ports: List[str]) -> None:
+    def set_ports(self, ports: list[str]) -> None:
         current_port = self._port_combo.currentText()
         self._port_combo.clear()
         self._port_combo.addItems(ports)

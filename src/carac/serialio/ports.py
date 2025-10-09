@@ -1,8 +1,7 @@
-import serial.tools.list_ports
 from typing import Dict
 
+import serial.tools.list_ports
 from loguru import logger
-
 
 ARDUINO_INDICATORS = [
     "arduino",
@@ -49,15 +48,16 @@ def is_arduino_port(port: str) -> bool:
     info = get_port_info(port)
     if not info:
         return False
-    
-    description = str(info.get("description", "")).lower()
-    manufacturer = str(info.get("manufacturer", "")).lower()
-    product = str(info.get("product", "")).lower()
-    
+
+    search_fields = [
+        str(info.get("description", "")).lower(),
+        str(info.get("manufacturer", "")).lower(),
+        str(info.get("product", "")).lower(),
+    ]
+
     return any(
-        indicator in description or
-        indicator in manufacturer or
-        indicator in product
+        indicator in field
+        for field in search_fields
         for indicator in ARDUINO_INDICATORS
     )
 

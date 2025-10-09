@@ -11,14 +11,12 @@ class LoggingConfig:
         "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
         "<level>{message}</level>"
     )
-    
     FORMAT_FILE = (
         "{time:YYYY-MM-DD HH:mm:ss} | "
         "{level: <8} | "
         "{name}:{function}:{line} - "
         "{message}"
     )
-    
     LEVEL_CONSOLE = "INFO"
     LEVEL_FILE = "DEBUG"
     ROTATION = "1 day"
@@ -28,20 +26,33 @@ class LoggingConfig:
     LOG_DIR_NAME = ".carac"
     LOG_SUBDIR = "logs"
 
+    @classmethod
+    def get_log_directory(cls) -> Path:
+        return Path.home() / cls.LOG_DIR_NAME / cls.LOG_SUBDIR
+
 
 def setup_logging() -> None:
     logger.remove()
-    
+
+    _configure_console_logging()
+    _configure_file_logging()
+
+    logger.info("Logging configured successfully")
+
+
+def _configure_console_logging() -> None:
     logger.add(
         sys.stderr,
         format=LoggingConfig.FORMAT_CONSOLE,
         level=LoggingConfig.LEVEL_CONSOLE,
         colorize=True,
     )
-    
-    log_dir = Path.home() / LoggingConfig.LOG_DIR_NAME / LoggingConfig.LOG_SUBDIR
+
+
+def _configure_file_logging() -> None:
+    log_dir = LoggingConfig.get_log_directory()
     log_dir.mkdir(parents=True, exist_ok=True)
-    
+
     logger.add(
         log_dir / LoggingConfig.LOG_FILE_PATTERN,
         format=LoggingConfig.FORMAT_FILE,
@@ -50,5 +61,3 @@ def setup_logging() -> None:
         retention=LoggingConfig.RETENTION,
         compression=LoggingConfig.COMPRESSION,
     )
-    
-    logger.info("Logging configured successfully")

@@ -1,5 +1,3 @@
-from typing import List
-
 from PySide6.QtCore import QThread, Signal
 
 from ...serialio.ports import get_available_ports, get_arduino_ports
@@ -17,15 +15,15 @@ class PortService:
     ARDUINO_ANNOTATION = " (Arduino)"
     
     @classmethod
-    def get_available_ports(cls) -> List[str]:
+    def get_available_ports(cls) -> list[str]:
         return get_available_ports()
     
     @classmethod
-    def get_arduino_ports(cls) -> List[str]:
+    def get_arduino_ports(cls) -> list[str]:
         return get_arduino_ports()
     
     @classmethod
-    def annotate_arduino_ports(cls, ports: List[str]) -> List[str]:
+    def annotate_arduino_ports(cls, ports: list[str]) -> list[str]:
         arduino_ports = cls.get_arduino_ports()
         return [
             f"{port}{cls.ARDUINO_ANNOTATION}" if port in arduino_ports else port
