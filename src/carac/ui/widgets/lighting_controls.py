@@ -17,7 +17,7 @@ class LightingControl(QFrame):
     value_changed = Signal(int)
     
     VALUE_LABEL_MIN_WIDTH = 30
-    RING_INDICATOR_WIDTH = 36
+    SECTION_INDICATOR_WIDTH = 36
     NORMALIZED_INPUT_WIDTH = 50
     SLIDER_MIN_HEIGHT = 20
     LAYOUT_SPACING_SMALL = 2
@@ -28,15 +28,15 @@ class LightingControl(QFrame):
     
     def __init__(
         self,
-        ring_name: str,
-        ring_number: int,
+        section_name: str,
+        section_number: int,
         parent: QWidget | None = None
     ) -> None:
         super().__init__(parent)
-        self._ring_number = ring_number
-        self._setup_ui(ring_name)
+        self._section_number = section_number
+        self._setup_ui(section_name)
     
-    def _setup_ui(self, ring_name: str) -> None:
+    def _setup_ui(self, section_name: str) -> None:
         self.setObjectName("lightingControlFrame")
         
         layout = QVBoxLayout(self)
@@ -49,7 +49,7 @@ class LightingControl(QFrame):
         )
         
         header_layout = QHBoxLayout()
-        name_label = QLabel(ring_name)
+        name_label = QLabel(section_name)
         name_label.setObjectName("ringNameLabel")
         header_layout.addWidget(name_label)
         
@@ -63,11 +63,11 @@ class LightingControl(QFrame):
         slider_layout = QHBoxLayout()
         slider_layout.setSpacing(self.LAYOUT_SPACING_MEDIUM)
         
-        ring_indicator = QLabel(f"R{self._ring_number}")
-        ring_indicator.setObjectName("ringIndicator")
-        ring_indicator.setAlignment(Qt.AlignCenter)
-        ring_indicator.setFixedWidth(self.RING_INDICATOR_WIDTH)
-        slider_layout.addWidget(ring_indicator)
+        section_indicator = QLabel(f"S{self._section_number}")
+        section_indicator.setObjectName("ringIndicator")
+        section_indicator.setAlignment(Qt.AlignCenter)
+        section_indicator.setFixedWidth(self.SECTION_INDICATOR_WIDTH)
+        slider_layout.addWidget(section_indicator)
         
         self._slider = QSlider(Qt.Horizontal)
         self._slider.setRange(0, self.SLIDER_MAX)
@@ -139,7 +139,11 @@ class LightingControl(QFrame):
 
 
 class LightingControlPanel(QGroupBox):
-    lighting_changed = Signal(str, int)
+    lighting_changed = Signal(str, int)  # channel, intensity
+    section_changed = Signal(int, int)  # section_index, intensity
+    
+    NUM_SECTIONS = 4
+    NUM_RINGS = 4
     
     def __init__(
         self,
@@ -148,7 +152,8 @@ class LightingControlPanel(QGroupBox):
     ) -> None:
         super().__init__("Iluminación Cilíndrica", parent)
         self._channels = channels
-        self._controls: dict[str, LightingControl] = {}
+        self._section_controls: list[LightingControl] = []
+        self._section_intensities: list[list[int]] = [[0] * self.NUM_SECTIONS for _ in range(self.NUM_RINGS)]
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -165,40 +170,91 @@ class LightingControlPanel(QGroupBox):
         controls_layout = QVBoxLayout()
         controls_layout.setSpacing(5)
         
-        ring_names = ["Anillo 1", "Anillo 2", "Anillo 3", "Anillo 4"]
+        section_names = ["Sección 1", "Sección 2", "Sección 3", "Sección 4"]
         
-        for i, channel in enumerate(self._channels):
-            control = LightingControl(ring_names[i], i + 1)
+        for i in range(self.NUM_SECTIONS):
+            control = LightingControl(section_names[i], i + 1)
             control.value_changed.connect(
-                lambda intensity, ch=channel, idx=i: self._on_control_changed(ch, intensity, idx)
+                lambda intensity, idx=i: self._on_section_changed(idx, intensity)
             )
             controls_layout.addWidget(control)
-            self._controls[channel] = control
+            self._section_controls.append(control)
         
         layout.addLayout(controls_layout)
     
-    def _on_control_changed(self, channel: str, intensity: int, ring_index: int) -> None:
-        self._cylinder_viz.set_ring_intensity(ring_index, intensity)
-        self.lighting_changed.emit(channel, intensity)
+    def _on_section_changed(self, section_index: int, intensity: int) -> None:
+        # Update all rings for this section
+        for ring_index in range(self.NUM_RINGS):
+            self._section_intensities[ring_index][section_index] = intensity
+            channel = f"ring{ring_index + 1}_section{section_index + 1}"
+            if channel in self._channels:
+                self.lighting_changed.emit(channel, intensity)
+        
+        # Update visualization
+        self._cylinder_viz.set_section_intensities(self._section_intensities)
+        self.section_changed.emit(section_index, intensity)
     
     def set_channel_value(self, channel: str, intensity: int) -> None:
-        if channel in self._controls:
-            control = self._controls[channel]
+        # Parse channel like "ring1_section2"
+        if "_" in channel:
+            parts = channel.split("_")
+            if len(parts) == 2 and parts[0].startswith("ring") and parts[1].startswith("section"):
+                try:
+                    ring_idx = int(parts[0].replace("ring", "")) - 1
+                    section_idx = int(parts[1].replace("section", "")) - 1
+                    if 0 <= ring_idx < self.NUM_RINGS and 0 <= section_idx < self.NUM_SECTIONS:
+                        self._section_intensities[ring_idx][section_idx] = intensity
+                        self._cylinder_viz.set_section_intensities(self._section_intensities)
+                except (ValueError, IndexError):
+                    pass
+    
+    def set_section_value(self, section_index: int, intensity: int) -> None:
+        if 0 <= section_index < self.NUM_SECTIONS:
+            control = self._section_controls[section_index]
             control.blockSignals(True)
             control.set_value(intensity)
             control.blockSignals(False)
             
-            ring_index = self._channels.index(channel)
-            self._cylinder_viz.set_ring_intensity(ring_index, intensity)
+            # Update all rings for this section
+            for ring_index in range(self.NUM_RINGS):
+                self._section_intensities[ring_index][section_index] = intensity
+            
+            self._cylinder_viz.set_section_intensities(self._section_intensities)
     
     def set_all_values(self, values: dict[str, int]) -> None:
+        # values is a dict of channel -> intensity
         for channel, intensity in values.items():
             self.set_channel_value(channel, intensity)
+        
+        # Update section sliders to match (use average if sections have different values)
+        for section_idx in range(self.NUM_SECTIONS):
+            # Get average intensity for this section across all rings
+            total = sum(self._section_intensities[ring_idx][section_idx] for ring_idx in range(self.NUM_RINGS))
+            avg_intensity = total // self.NUM_RINGS
+            
+            control = self._section_controls[section_idx]
+            control.blockSignals(True)
+            control.set_value(avg_intensity)
+            control.blockSignals(False)
     
     def get_channel_value(self, channel: str) -> int:
-        if channel in self._controls:
-            return self._controls[channel].get_value()
+        # Parse channel like "ring1_section2"
+        if "_" in channel:
+            parts = channel.split("_")
+            if len(parts) == 2 and parts[0].startswith("ring") and parts[1].startswith("section"):
+                try:
+                    ring_idx = int(parts[0].replace("ring", "")) - 1
+                    section_idx = int(parts[1].replace("section", "")) - 1
+                    if 0 <= ring_idx < self.NUM_RINGS and 0 <= section_idx < self.NUM_SECTIONS:
+                        return self._section_intensities[ring_idx][section_idx]
+                except (ValueError, IndexError):
+                    pass
         return 0
     
     def get_all_values(self) -> dict[str, int]:
-        return {channel: control.get_value() for channel, control in self._controls.items()}
+        values = {}
+        for ring_idx in range(self.NUM_RINGS):
+            for section_idx in range(self.NUM_SECTIONS):
+                channel = f"ring{ring_idx + 1}_section{section_idx + 1}"
+                values[channel] = self._section_intensities[ring_idx][section_idx]
+        return values

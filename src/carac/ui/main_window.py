@@ -50,6 +50,12 @@ class MainWindow(QMainWindow):
         self._session_controller = SessionController()
         self._port_refresh_timer = QTimer()
         self._port_refresh_thread = PortRefreshThread()
+        self._current_section_intensities: dict[str, int] = {
+            "section1": 0,
+            "section2": 0,
+            "section3": 0,
+            "section4": 0,
+        }
 
         self._initialize_window()
         logger.info("Main window initialized")
@@ -206,7 +212,7 @@ class MainWindow(QMainWindow):
         self._connection_panel.connection_toggle_requested.connect(self._toggle_connection)
         self._port_refresh_thread.ports_updated.connect(self._update_port_list)
         
-        self._lighting_panel.lighting_changed.connect(self._on_lighting_changed)
+        self._lighting_panel.section_changed.connect(self._on_section_changed)
         
         self._preset_panel.preset_selected.connect(self._on_preset_selected)
         
@@ -292,21 +298,51 @@ class MainWindow(QMainWindow):
             self._photo_panel.set_system_info("Desconectado", "disconnected")
             self._heartbeat_card.set_value("—", "inactive")
     
-    def _on_lighting_changed(self, channel: str, intensity: int) -> None:
+    def _on_section_changed(self, section_index: int, intensity: int) -> None:
+        """Called when a section slider is moved - sends all sections to ESP32"""
         self._preset_panel.clear_selection()
         
+        # Update the changed section in our state
+        section_key = f"section{section_index + 1}"
+        self._current_section_intensities[section_key] = intensity
+        
         if self._session_controller.is_connected:
-            success = self._session_controller.set_lighting(channel, intensity)
-            ring_index = settings.lighting_channels.index(channel) if channel in settings.lighting_channels else -1
+            # Send all sections at once
+            success = self._session_controller.set_sections(self._current_section_intensities)
+            
             if success:
                 normalized = intensity / 255.0
-                self._log_panel.add_message(f"Anillo {ring_index + 1} configurado a {normalized:.2f}")
+                self._log_panel.add_message(f"Sección {section_index + 1} configurada a {normalized:.2f}")
             else:
-                self._log_panel.add_message(f"Error al configurar Anillo {ring_index + 1}", is_error=True)
+                self._log_panel.add_message(f"Error al configurar Sección {section_index + 1}", is_error=True)
     
     def _on_preset_selected(self, preset_name: str, preset_values: dict[str, int]) -> None:
         self._lighting_panel.set_all_values(preset_values)
-        self._log_panel.add_message(f"Perfil '{preset_name}' aplicado")
+        
+        # Extract section intensities from ring1 (all rings have same values per section)
+        sections_to_send = {}
+        for section_idx in range(1, 5):
+            channel = f"ring1_section{section_idx}"
+            if channel in preset_values:
+                intensity = preset_values[channel]
+                section_key = f"section{section_idx}"
+                sections_to_send[section_key] = intensity
+                # Update internal state
+                self._current_section_intensities[section_key] = intensity
+        
+        # Send all sections in one command if connected
+        if self._session_controller.is_connected:
+            success = self._session_controller.set_sections(sections_to_send)
+            
+            if success:
+                self._log_panel.add_message(f"Perfil '{preset_name}' aplicado (4 secciones configuradas)")
+            else:
+                self._log_panel.add_message(
+                    f"Perfil '{preset_name}' aplicado con errores",
+                    is_error=True
+                )
+        else:
+            self._log_panel.add_message(f"Perfil '{preset_name}' aplicado (no conectado)")
     
     def _on_position_forward(self) -> None:
         if not self._check_connected():
@@ -409,7 +445,13 @@ class MainWindow(QMainWindow):
         
         logger.info(f"ESP32 Event: {event.type}")
         
-        if event.type == MessageType.EVENT_SEQUENCE_STARTED:
+        if event.type == MessageType.EVENT_STATUS:
+            message = event.payload.get("message", "Ready")
+            firmware_version = event.payload.get("firmware_version", "Unknown")
+            self._log_panel.add_message(f"{message} (Firmware: v{firmware_version})")
+            self._arduino_card.set_value(f"{message}", "Ready")
+        
+        elif event.type == MessageType.EVENT_SEQUENCE_STARTED:
             total = event.payload.get("total_photos", 0)
             self._log_panel.add_message(f"Secuencia iniciada: {total} fotos")
             self._photo_panel.set_sequence_active(True)
@@ -452,14 +494,14 @@ class MainWindow(QMainWindow):
             self._handle_lost_heartbeat()
 
     def _handle_alive_heartbeat(self, health: ConnectionHealth) -> None:
-        uptime_str = self._format_uptime(health.esp32_uptime_ms)
-        self._heartbeat_card.set_value(f"● {uptime_str}", "connected")
+        self._heartbeat_card.set_value("Active", "connected")
 
         if health.heartbeat_count % 10 == 0:
+            uptime_str = self._format_uptime(health.esp32_uptime_ms)
             logger.debug(f"Heartbeat #{health.heartbeat_count}: uptime={uptime_str}")
 
     def _handle_lost_heartbeat(self) -> None:
-        self._heartbeat_card.set_value("Perdido", "disconnected")
+        self._heartbeat_card.set_value("dead", "disconnected")
         self._log_panel.add_message(
             "⚠ Conexión perdida - sin heartbeat",
             is_error=True

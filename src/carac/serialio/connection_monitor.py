@@ -183,6 +183,9 @@ class ConnectionMonitor:
             time.sleep(self.CHECK_INTERVAL_SECONDS)
 
     def _check_heartbeat_timeout(self, current_time: float) -> None:
+        health_snapshot = None
+        timeout_detected = False
+        
         with self._lock:
             if self._health.last_heartbeat_time <= 0:
                 return
@@ -192,11 +195,17 @@ class ConnectionMonitor:
 
             if self._health.is_alive and elapsed > self.heartbeat_timeout_seconds:
                 self._health.is_alive = False
+                timeout_detected = True
                 logger.warning(
                     f"Connection timeout detected "
                     f"(no heartbeat for {elapsed:.1f}s)"
                 )
-                self._notify_timeout_callback()
+                health_snapshot = self._create_health_snapshot()
+        
+        # Notify outside the lock to avoid potential deadlocks
+        if timeout_detected and health_snapshot:
+            self._notify_heartbeat_callback(health_snapshot)
+            self._notify_timeout_callback()
 
     def _notify_timeout_callback(self) -> None:
         if self._timeout_callback:

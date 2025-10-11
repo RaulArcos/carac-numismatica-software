@@ -73,6 +73,34 @@ class SessionController:
         response = self._arduino_client.set_lighting(channel, intensity)
 
         return self._handle_lighting_response(response, channel, intensity)
+    
+    def set_sections(self, sections: dict[str, int]) -> bool:
+        """Set multiple sections at once"""
+        if not self._arduino_client.is_connected:
+            logger.warning("Not connected to Arduino")
+            return False
+        
+        # Validate and clamp all sections
+        clamped_sections = {}
+        for section, intensity in sections.items():
+            if section not in self._lighting_states:
+                logger.error(f"Unknown lighting channel: {section}")
+                return False
+            clamped_sections[section] = self._clamp_intensity(intensity)
+        
+        # Update all states
+        for section, intensity in clamped_sections.items():
+            self._update_lighting_state(section, intensity)
+        
+        # Send single command with all sections
+        response = self._arduino_client.set_sections(clamped_sections)
+        
+        if response and response.success:
+            logger.info(f"Set sections lighting: {clamped_sections}")
+            return True
+        else:
+            logger.error(f"Failed to set sections lighting")
+            return False
 
     def _clamp_intensity(self, intensity: int) -> int:
         return max(0, min(intensity, settings.max_lighting_intensity))

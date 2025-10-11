@@ -27,6 +27,7 @@ class MessageType(str, Enum):
     EVENT_MOTOR_COMPLETE = "event_motor_complete"
     EVENT_CAMERA_TRIGGERED = "event_camera_triggered"
     EVENT_HEARTBEAT = "event_heartbeat"
+    EVENT_STATUS = "status"
     RESPONSE_ACK = "response_ack"
 
 
@@ -85,6 +86,14 @@ class LightingSetCommand(Message):
         return cls(
             type=MessageType.LIGHTING_SET,
             payload={"channel": channel, "intensity": intensity}
+        )
+    
+    @classmethod
+    def create_sections(cls, sections: dict[str, int]) -> "LightingSetCommand":
+        """Create a command to set multiple sections at once"""
+        return cls(
+            type=MessageType.LIGHTING_SET,
+            payload={"sections": sections}
         )
 
 

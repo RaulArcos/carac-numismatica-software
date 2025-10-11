@@ -19,8 +19,18 @@ class Settings(BaseSettings):
     heartbeat_timeout_ms: int = Field(default=10000)
     firmware_version: str = Field(default="1.0.0")
 
-    lighting_channels: list[str] = Field(default=["ring1", "ring2", "ring3", "ring4"])
+    # Section-based lighting: 4 sections × 4 rings = 16 channels
+    # Also includes section-only channels for presets (section1-4 control all rings)
+    lighting_channels: list[str] = Field(default=[
+        "ring1_section1", "ring1_section2", "ring1_section3", "ring1_section4",
+        "ring2_section1", "ring2_section2", "ring2_section3", "ring2_section4",
+        "ring3_section1", "ring3_section2", "ring3_section3", "ring3_section4",
+        "ring4_section1", "ring4_section2", "ring4_section3", "ring4_section4",
+        "section1", "section2", "section3", "section4",
+    ])
     max_lighting_intensity: int = Field(default=255)
+    num_sections: int = Field(default=4)
+    num_rings: int = Field(default=4)
 
     window_width: int = Field(default=800)
     window_height: int = Field(default=600)

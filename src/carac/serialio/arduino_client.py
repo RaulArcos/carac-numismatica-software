@@ -47,6 +47,7 @@ class ArduinoClient:
         self._pending_response: Response | None = None
         self._response_event = Event()
         self._command_timeout = self.DEFAULT_COMMAND_TIMEOUT
+        self._last_sent_command_type: str | None = None
 
         self._connection_monitor = ConnectionMonitor()
         self._heartbeat_callback: Callable[[ConnectionHealth], None] | None = None
@@ -117,6 +118,7 @@ class ArduinoClient:
         self._status = ConnectionStatus.DISCONNECTED
         self._pending_response = None
         self._response_event.clear()
+        self._last_sent_command_type = None
     
     def send_command(self, command: Message | Command) -> Response | None:
         if not self._serial or not self._serial.is_open:
@@ -135,6 +137,7 @@ class ArduinoClient:
         with self._lock:
             self._pending_response = None
             self._response_event.clear()
+            self._last_sent_command_type = command.type
 
             command_data = command.to_serial()
             logger.info(f"→ ESP32: {command_data.strip()}")
@@ -191,6 +194,9 @@ class ArduinoClient:
     
     def set_lighting(self, channel: str, intensity: int) -> Response | None:
         return self.send_command(LightingSetCommand.create(channel, intensity))
+    
+    def set_sections(self, sections: dict[str, int]) -> Response | None:
+        return self.send_command(LightingSetCommand.create_sections(sections))
     
     def start_photo_sequence(
         self,
@@ -299,8 +305,17 @@ class ArduinoClient:
         if self._is_response_message(message):
             response = Response.from_message(message)
             self._route_response(response)
-        elif self._is_event_message(message):
+        elif self._is_event_message(message) or message.type == MessageType.EVENT_STATUS:
             self._route_event(message)
+        elif self._is_command_echo(message):
+            logger.debug(f"Received command echo confirmation: {message.type}")
+            self._last_sent_command_type = None 
+            response = Response(
+                success=True,
+                message=f"Command '{message.type}' confirmed",
+                data=message.payload
+            )
+            self._route_response(response)
         else:
             logger.warning(f"Received unexpected message type: {message.type}")
     
@@ -313,6 +328,10 @@ class ArduinoClient:
     
     def _is_event_message(self, message: Message) -> bool:
         return message.type.startswith("event_")
+    
+    def _is_command_echo(self, message: Message) -> bool:
+        """Check if the received message is an echo of the last sent command"""
+        return self._last_sent_command_type is not None and message.type == self._last_sent_command_type
     
     def _route_response(self, response: Response) -> None:
         with self._lock:
