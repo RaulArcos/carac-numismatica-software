@@ -139,8 +139,8 @@ class LightingControl(QFrame):
 
 
 class LightingControlPanel(QGroupBox):
-    lighting_changed = Signal(str, int)  # channel, intensity
-    section_changed = Signal(int, int)  # section_index, intensity
+    lighting_changed = Signal(str, int)
+    section_changed = Signal(int, int)
     
     NUM_SECTIONS = 4
     NUM_RINGS = 4
@@ -183,52 +183,51 @@ class LightingControlPanel(QGroupBox):
         layout.addLayout(controls_layout)
     
     def _on_section_changed(self, section_index: int, intensity: int) -> None:
-        # Update all rings for this section
         for ring_index in range(self.NUM_RINGS):
             self._section_intensities[ring_index][section_index] = intensity
             channel = f"ring{ring_index + 1}_section{section_index + 1}"
             if channel in self._channels:
                 self.lighting_changed.emit(channel, intensity)
         
-        # Update visualization
         self._cylinder_viz.set_section_intensities(self._section_intensities)
         self.section_changed.emit(section_index, intensity)
     
     def set_channel_value(self, channel: str, intensity: int) -> None:
-        # Parse channel like "ring1_section2"
-        if "_" in channel:
-            parts = channel.split("_")
-            if len(parts) == 2 and parts[0].startswith("ring") and parts[1].startswith("section"):
-                try:
-                    ring_idx = int(parts[0].replace("ring", "")) - 1
-                    section_idx = int(parts[1].replace("section", "")) - 1
-                    if 0 <= ring_idx < self.NUM_RINGS and 0 <= section_idx < self.NUM_SECTIONS:
-                        self._section_intensities[ring_idx][section_idx] = intensity
-                        self._cylinder_viz.set_section_intensities(self._section_intensities)
-                except (ValueError, IndexError):
-                    pass
+        if "_" not in channel:
+            return
+        
+        parts = channel.split("_")
+        if len(parts) != 2 or not parts[0].startswith("ring") or not parts[1].startswith("section"):
+            return
+        
+        try:
+            ring_idx = int(parts[0].replace("ring", "")) - 1
+            section_idx = int(parts[1].replace("section", "")) - 1
+            if 0 <= ring_idx < self.NUM_RINGS and 0 <= section_idx < self.NUM_SECTIONS:
+                self._section_intensities[ring_idx][section_idx] = intensity
+                self._cylinder_viz.set_section_intensities(self._section_intensities)
+        except (ValueError, IndexError):
+            pass
     
     def set_section_value(self, section_index: int, intensity: int) -> None:
-        if 0 <= section_index < self.NUM_SECTIONS:
-            control = self._section_controls[section_index]
-            control.blockSignals(True)
-            control.set_value(intensity)
-            control.blockSignals(False)
-            
-            # Update all rings for this section
-            for ring_index in range(self.NUM_RINGS):
-                self._section_intensities[ring_index][section_index] = intensity
-            
-            self._cylinder_viz.set_section_intensities(self._section_intensities)
+        if not 0 <= section_index < self.NUM_SECTIONS:
+            return
+        
+        control = self._section_controls[section_index]
+        control.blockSignals(True)
+        control.set_value(intensity)
+        control.blockSignals(False)
+        
+        for ring_index in range(self.NUM_RINGS):
+            self._section_intensities[ring_index][section_index] = intensity
+        
+        self._cylinder_viz.set_section_intensities(self._section_intensities)
     
     def set_all_values(self, values: dict[str, int]) -> None:
-        # values is a dict of channel -> intensity
         for channel, intensity in values.items():
             self.set_channel_value(channel, intensity)
         
-        # Update section sliders to match (use average if sections have different values)
         for section_idx in range(self.NUM_SECTIONS):
-            # Get average intensity for this section across all rings
             total = sum(self._section_intensities[ring_idx][section_idx] for ring_idx in range(self.NUM_RINGS))
             avg_intensity = total // self.NUM_RINGS
             
@@ -238,17 +237,20 @@ class LightingControlPanel(QGroupBox):
             control.blockSignals(False)
     
     def get_channel_value(self, channel: str) -> int:
-        # Parse channel like "ring1_section2"
-        if "_" in channel:
-            parts = channel.split("_")
-            if len(parts) == 2 and parts[0].startswith("ring") and parts[1].startswith("section"):
-                try:
-                    ring_idx = int(parts[0].replace("ring", "")) - 1
-                    section_idx = int(parts[1].replace("section", "")) - 1
-                    if 0 <= ring_idx < self.NUM_RINGS and 0 <= section_idx < self.NUM_SECTIONS:
-                        return self._section_intensities[ring_idx][section_idx]
-                except (ValueError, IndexError):
-                    pass
+        if "_" not in channel:
+            return 0
+        
+        parts = channel.split("_")
+        if len(parts) != 2 or not parts[0].startswith("ring") or not parts[1].startswith("section"):
+            return 0
+        
+        try:
+            ring_idx = int(parts[0].replace("ring", "")) - 1
+            section_idx = int(parts[1].replace("section", "")) - 1
+            if 0 <= ring_idx < self.NUM_RINGS and 0 <= section_idx < self.NUM_SECTIONS:
+                return self._section_intensities[ring_idx][section_idx]
+        except (ValueError, IndexError):
+            pass
         return 0
     
     def get_all_values(self) -> dict[str, int]:

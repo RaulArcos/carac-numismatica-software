@@ -52,7 +52,6 @@ class ConnectionMonitor:
         if self._monitoring:
             logger.warning("Connection monitoring already active")
             return
-
         logger.info("Starting connection monitoring")
         self._monitoring = True
         self._monitor_thread = Thread(target=self._monitor_loop, daemon=True)
@@ -61,16 +60,10 @@ class ConnectionMonitor:
     def stop_monitoring(self) -> None:
         if not self._monitoring:
             return
-
         logger.info("Stopping connection monitoring")
         self._monitoring = False
-
         if self._monitor_thread and self._monitor_thread.is_alive():
             self._monitor_thread.join(timeout=self.THREAD_JOIN_TIMEOUT_SECONDS)
-
-        self._reset_state()
-
-    def _reset_state(self) -> None:
         with self._lock:
             self._health = ConnectionHealth()
             self._pending_acks.clear()
@@ -78,77 +71,57 @@ class ConnectionMonitor:
     
     def handle_heartbeat(self, uptime_ms: int, status: str) -> None:
         current_time = time.time()
-
         with self._lock:
             previous_alive = self._health.is_alive
-
             self._health.is_alive = True
             self._health.last_heartbeat_time = current_time
             self._health.esp32_uptime_ms = uptime_ms
             self._health.seconds_since_heartbeat = 0.0
             self._health.heartbeat_count += 1
+            health_snapshot = ConnectionHealth(
+                is_alive=self._health.is_alive,
+                last_heartbeat_time=self._health.last_heartbeat_time,
+                esp32_uptime_ms=self._health.esp32_uptime_ms,
+                seconds_since_heartbeat=self._health.seconds_since_heartbeat,
+                heartbeat_count=self._health.heartbeat_count
+            )
 
-            health_snapshot = self._create_health_snapshot()
-
-        self._log_heartbeat_status(previous_alive, health_snapshot, uptime_ms, status)
-        self._notify_heartbeat_callback(health_snapshot)
-
-    def _create_health_snapshot(self) -> ConnectionHealth:
-        return ConnectionHealth(
-            is_alive=self._health.is_alive,
-            last_heartbeat_time=self._health.last_heartbeat_time,
-            esp32_uptime_ms=self._health.esp32_uptime_ms,
-            seconds_since_heartbeat=self._health.seconds_since_heartbeat,
-            heartbeat_count=self._health.heartbeat_count
-        )
-
-    def _log_heartbeat_status(
-        self,
-        previous_alive: bool,
-        health_snapshot: ConnectionHealth,
-        uptime_ms: int,
-        status: str
-    ) -> None:
         if not previous_alive:
             logger.info("Connection restored - heartbeat received")
-
         logger.debug(
             f"Heartbeat #{health_snapshot.heartbeat_count}: "
             f"uptime={uptime_ms}ms, status={status}"
         )
+        
+        if not self._heartbeat_callback:
+            return
 
-    def _notify_heartbeat_callback(self, health_snapshot: ConnectionHealth) -> None:
-        if self._heartbeat_callback:
-            try:
-                self._heartbeat_callback(health_snapshot)
-            except Exception as e:
-                logger.error(f"Error in heartbeat callback: {e}")
+        try:
+            self._heartbeat_callback(health_snapshot)
+        except Exception as e:
+            logger.error(f"Error in heartbeat callback: {e}")
     
     def handle_acknowledgment(self, received_type: str, timestamp: int) -> None:
         current_time = time.time()
-
         with self._lock:
             sent_time = self._pending_acks.pop(received_type, current_time)
             round_trip_ms = (current_time - sent_time) * 1000
-
             ack_info = AcknowledgmentInfo(
                 received_type=received_type,
                 timestamp=timestamp,
                 sent_time=sent_time,
                 round_trip_ms=round_trip_ms
             )
-
             self._last_ack = ack_info
 
         logger.debug(f"✓ ACK for '{received_type}' (RTT: {round_trip_ms:.1f}ms)")
-        self._notify_ack_callback(ack_info)
+        if not self._ack_callback:
+            return
 
-    def _notify_ack_callback(self, ack_info: AcknowledgmentInfo) -> None:
-        if self._ack_callback:
-            try:
-                self._ack_callback(ack_info)
-            except Exception as e:
-                logger.error(f"Error in ACK callback: {e}")
+        try:
+            self._ack_callback(ack_info)
+        except Exception as e:
+            logger.error(f"Error in ACK callback: {e}")
     
     def register_command_sent(self, command_type: str) -> None:
         with self._lock:
@@ -189,25 +162,29 @@ class ConnectionMonitor:
         with self._lock:
             if self._health.last_heartbeat_time <= 0:
                 return
-
             elapsed = current_time - self._health.last_heartbeat_time
             self._health.seconds_since_heartbeat = elapsed
-
             if self._health.is_alive and elapsed > self.heartbeat_timeout_seconds:
                 self._health.is_alive = False
                 timeout_detected = True
-                logger.warning(
-                    f"Connection timeout detected "
-                    f"(no heartbeat for {elapsed:.1f}s)"
+                logger.warning(f"Connection timeout detected (no heartbeat for {elapsed:.1f}s)")
+                health_snapshot = ConnectionHealth(
+                    is_alive=self._health.is_alive,
+                    last_heartbeat_time=self._health.last_heartbeat_time,
+                    esp32_uptime_ms=self._health.esp32_uptime_ms,
+                    seconds_since_heartbeat=self._health.seconds_since_heartbeat,
+                    heartbeat_count=self._health.heartbeat_count
                 )
-                health_snapshot = self._create_health_snapshot()
         
-        # Notify outside the lock to avoid potential deadlocks
-        if timeout_detected and health_snapshot:
-            self._notify_heartbeat_callback(health_snapshot)
-            self._notify_timeout_callback()
+        if not timeout_detected or not health_snapshot:
+            return
 
-    def _notify_timeout_callback(self) -> None:
+        if self._heartbeat_callback:
+            try:
+                self._heartbeat_callback(health_snapshot)
+            except Exception as e:
+                logger.error(f"Error in heartbeat callback: {e}")
+
         if self._timeout_callback:
             try:
                 self._timeout_callback()

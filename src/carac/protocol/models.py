@@ -61,63 +61,45 @@ class Message(BaseModel):
     def from_serial(cls, data: str) -> "Message":
         try:
             if not data or not data.strip():
-                return cls._create_parse_error("Empty message received", data)
-
-            parsed = json.loads(data.strip())
-            return cls(**parsed)
+                return cls(
+                    type=MessageType.RESPONSE_ERROR,
+                    payload={
+                        "message": "Empty message received",
+                        "error_code": ErrorCode.PARSE_ERROR,
+                        "data": {"raw": data}
+                    }
+                )
+            return cls(**json.loads(data.strip()))
         except (json.JSONDecodeError, ValueError) as e:
-            return cls._create_parse_error(f"Failed to parse message: {e}", data)
-
-    @classmethod
-    def _create_parse_error(cls, message: str, raw_data: str) -> "Message":
-        return Message(
-            type=MessageType.RESPONSE_ERROR,
-            payload={
-                "message": message,
-                "error_code": ErrorCode.PARSE_ERROR,
-                "data": {"raw": raw_data}
-            }
-        )
+            return cls(
+                type=MessageType.RESPONSE_ERROR,
+                payload={
+                    "message": f"Failed to parse message: {e}",
+                    "error_code": ErrorCode.PARSE_ERROR,
+                    "data": {"raw": data}
+                }
+            )
 
 
 class LightingSetCommand(Message):
     @classmethod
     def create(cls, channel: str, intensity: int) -> "LightingSetCommand":
-        return cls(
-            type=MessageType.LIGHTING_SET,
-            payload={"channel": channel, "intensity": intensity}
-        )
+        return cls(type=MessageType.LIGHTING_SET, payload={"channel": channel, "intensity": intensity})
     
     @classmethod
     def create_sections(cls, sections: dict[str, int]) -> "LightingSetCommand":
-        """Create a command to set multiple sections at once"""
-        return cls(
-            type=MessageType.LIGHTING_SET,
-            payload={"sections": sections}
-        )
+        return cls(type=MessageType.LIGHTING_SET, payload={"sections": sections})
 
 
 class PhotoSequenceStartCommand(Message):
     @classmethod
-    def create(
-        cls,
-        count: int = 5,
-        delay: float = 1.0,
-        auto_flip: bool = False
-    ) -> "PhotoSequenceStartCommand":
-        return cls(
-            type=MessageType.PHOTO_SEQUENCE_START,
-            payload={"count": count, "delay": delay, "auto_flip": auto_flip}
-        )
+    def create(cls, count: int = 5, delay: float = 1.0, auto_flip: bool = False) -> "PhotoSequenceStartCommand":
+        return cls(type=MessageType.PHOTO_SEQUENCE_START, payload={"count": count, "delay": delay, "auto_flip": auto_flip})
 
 
 class MotorPositionCommand(Message):
     @classmethod
-    def create(
-        cls,
-        direction: Literal["forward", "backward"],
-        steps: int | None = None
-    ) -> "MotorPositionCommand":
+    def create(cls, direction: Literal["forward", "backward"], steps: int | None = None) -> "MotorPositionCommand":
         payload = {"direction": direction}
         if steps is not None:
             payload["steps"] = steps
@@ -133,10 +115,7 @@ class MotorFlipCommand(Message):
 class CameraTriggerCommand(Message):
     @classmethod
     def create(cls, duration: int | None = None) -> "CameraTriggerCommand":
-        payload = {}
-        if duration is not None:
-            payload["duration"] = duration
-        return cls(type=MessageType.CAMERA_TRIGGER, payload=payload)
+        return cls(type=MessageType.CAMERA_TRIGGER, payload={"duration": duration} if duration is not None else {})
 
 
 class SystemPingCommand(Message):
@@ -183,9 +162,7 @@ class ResponseMessage(Message):
         return self.payload.get("data", {})
 
     def get_error_code(self) -> str | None:
-        if self.is_error():
-            return self.payload.get("error_code")
-        return None
+        return self.payload.get("error_code") if self.is_error() else None
 
 
 class Response(BaseModel):
@@ -195,43 +172,30 @@ class Response(BaseModel):
 
     @classmethod
     def from_message(cls, msg: Message) -> "Response":
-        response_map = {
-            MessageType.RESPONSE_SUCCESS: lambda: cls(
+        if msg.type == MessageType.RESPONSE_SUCCESS:
+            return cls(
                 success=True,
                 message=msg.payload.get("message", "Success"),
                 data=msg.payload.get("data", {})
-            ),
-            MessageType.RESPONSE_ERROR: lambda: cls(
+            )
+        elif msg.type == MessageType.RESPONSE_ERROR:
+            return cls(
                 success=False,
                 message=msg.payload.get("message", "Error"),
                 data=msg.payload.get("data", {})
-            ),
-            MessageType.RESPONSE_STATUS: lambda: cls(
+            )
+        elif msg.type == MessageType.RESPONSE_STATUS:
+            return cls(
                 success=True,
                 message="Status retrieved",
                 data=msg.payload
-            ),
-        }
-
-        return response_map.get(
-            msg.type,
-            lambda: cls(
-                success=True,
-                message=f"Event: {msg.type}",
-                data=msg.payload
             )
-        )()
+        return cls(
+            success=True,
+            message=f"Event: {msg.type}",
+            data=msg.payload
+        )
 
     @classmethod
     def from_serial(cls, data: str) -> "Response":
-        msg = Message.from_serial(data)
-        return cls.from_message(msg)
-
-
-Command = Message
-CommandType = MessageType
-PingCommand = SystemPingCommand
-StatusCommand = SystemStatusCommand
-LightingCommand = LightingSetCommand
-PhotoSequenceCommand = PhotoSequenceStartCommand
-LedToggleCommand = TestLedToggleCommand
+        return cls.from_message(Message.from_serial(data))

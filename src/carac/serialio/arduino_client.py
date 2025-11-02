@@ -8,7 +8,6 @@ from loguru import logger
 from ..config.settings import settings
 from ..protocol.models import (
     CameraTriggerCommand,
-    Command,
     ConnectionStatus,
     LightingSetCommand,
     Message,
@@ -48,23 +47,27 @@ class ArduinoClient:
         self._response_event = Event()
         self._command_timeout = self.DEFAULT_COMMAND_TIMEOUT
         self._last_sent_command_type: str | None = None
-
         self._connection_monitor = ConnectionMonitor()
         self._heartbeat_callback: Callable[[ConnectionHealth], None] | None = None
         self._ack_callback: Callable[[AcknowledgmentInfo], None] | None = None
+
     
     def connect(self, port: str, baud_rate: int | None = None) -> bool:
         if self._status == ConnectionStatus.CONNECTED:
             logger.warning("Already connected to Arduino")
             return True
 
-        baud_rate = baud_rate or settings.default_baud_rate
-
         try:
             self._status = ConnectionStatus.CONNECTING
+            baud_rate = baud_rate or settings.default_baud_rate
             logger.info(f"Connecting to Arduino on {port} at {baud_rate} baud")
 
-            self._serial = self._create_serial_connection(port, baud_rate)
+            self._serial = serial.Serial(
+                port=port,
+                baudrate=baud_rate,
+                timeout=settings.default_timeout,
+                write_timeout=settings.default_timeout,
+            )
             time.sleep(self.RECONNECT_DELAY)
 
             if not self._serial.is_open:
@@ -72,96 +75,66 @@ class ArduinoClient:
                 logger.error("Failed to open serial connection")
                 return False
 
-            self._finalize_connection()
+            self._status = ConnectionStatus.CONNECTED
+            logger.info("Successfully connected to Arduino")
+            self._start_reading()
+            self._connection_monitor.start_monitoring()
+            time.sleep(self.HANDSHAKE_DELAY)
             return True
 
         except Exception as e:
             self._status = ConnectionStatus.ERROR
             logger.error(f"Error connecting to Arduino: {e}")
             return False
-
-    def _create_serial_connection(self, port: str, baud_rate: int) -> serial.Serial:
-        return serial.Serial(
-            port=port,
-            baudrate=baud_rate,
-            timeout=settings.default_timeout,
-            write_timeout=settings.default_timeout,
-        )
-
-    def _finalize_connection(self) -> None:
-        self._status = ConnectionStatus.CONNECTED
-        logger.info("Successfully connected to Arduino")
-        self._start_reading()
-        self._connection_monitor.start_monitoring()
-        time.sleep(self.HANDSHAKE_DELAY)
     
     def disconnect(self) -> None:
         self._connection_monitor.stop_monitoring()
-
         with self._lock:
             if self._serial and self._serial.is_open:
-                self._stop_read_thread()
+                self._stop_reading = True
+                self._response_event.set()
+                if self._read_thread and self._read_thread.is_alive():
+                    self._read_thread.join(timeout=self.THREAD_JOIN_TIMEOUT)
                 self._serial.close()
                 logger.info("Disconnected from Arduino")
-
-            self._reset_connection_state()
-
-    def _stop_read_thread(self) -> None:
-        self._stop_reading = True
-        self._response_event.set()
-
-        if self._read_thread and self._read_thread.is_alive():
-            self._read_thread.join(timeout=self.THREAD_JOIN_TIMEOUT)
-
-    def _reset_connection_state(self) -> None:
-        self._serial = None
-        self._status = ConnectionStatus.DISCONNECTED
-        self._pending_response = None
-        self._response_event.clear()
-        self._last_sent_command_type = None
+            self._serial = None
+            self._status = ConnectionStatus.DISCONNECTED
+            self._pending_response = None
+            self._response_event.clear()
+            self._last_sent_command_type = None
     
-    def send_command(self, command: Message | Command) -> Response | None:
+    def send_command(self, command: Message) -> Response | None:
         if not self._serial or not self._serial.is_open:
             logger.error("Not connected to ESP32")
             return None
 
         try:
-            self._prepare_and_send_command(command)
-            return self._wait_for_response()
+            with self._lock:
+                self._pending_response = None
+                self._response_event.clear()
+                self._last_sent_command_type = command.type
+                command_data = command.to_serial()
+                logger.info(f"→ ESP32: {command_data.strip()}")
+                self._connection_monitor.register_command_sent(command.type)
+                self._serial.write(command_data.encode('utf-8'))
+                self._serial.flush()
+
+            if not self._response_event.wait(timeout=self._command_timeout):
+                logger.warning("No response received from ESP32 within timeout")
+                return None
+
+            with self._lock:
+                response = self._pending_response
+                self._pending_response = None
+                if response:
+                    logger.info(f"← ESP32: {response}")
+                else:
+                    logger.warning("Response event triggered but no response data")
+                return response
 
         except Exception as e:
             logger.error(f"Error sending command: {e}")
             return None
-
-    def _prepare_and_send_command(self, command: Message | Command) -> None:
-        with self._lock:
-            self._pending_response = None
-            self._response_event.clear()
-            self._last_sent_command_type = command.type
-
-            command_data = command.to_serial()
-            logger.info(f"→ ESP32: {command_data.strip()}")
-
-            self._connection_monitor.register_command_sent(command.type)
-
-            self._serial.write(command_data.encode('utf-8'))
-            self._serial.flush()
-
-    def _wait_for_response(self) -> Response | None:
-        if not self._response_event.wait(timeout=self._command_timeout):
-            logger.warning("No response received from ESP32 within timeout")
-            return None
-
-        with self._lock:
-            response = self._pending_response
-            self._pending_response = None
-
-            if response:
-                logger.info(f"← ESP32: {response}")
-                return response
-            else:
-                logger.warning("Response event triggered but no response data")
-                return None
     
     def ping(self) -> bool:
         response = self.send_command(SystemPingCommand.create())
@@ -175,19 +148,12 @@ class ArduinoClient:
         logger.info("Testing ESP32 communication...")
         original_timeout = self._command_timeout
         self._command_timeout = self.COMMUNICATION_TEST_TIMEOUT
-
         try:
             success = self.ping()
-            self._log_test_result(success)
+            logger.info("Communication test successful!" if success else "Communication test failed")
             return success
         finally:
             self._command_timeout = original_timeout
-
-    def _log_test_result(self, success: bool) -> None:
-        if success:
-            logger.info("Communication test successful!")
-        else:
-            logger.warning("Communication test failed")
     
     def get_status(self) -> Response | None:
         return self.send_command(SystemStatusCommand.create())
@@ -261,77 +227,49 @@ class ArduinoClient:
         logger.debug("Read loop stopped")
 
     def _process_serial_data(self) -> None:
-        if self._serial.in_waiting <= 0:
+        if not self._serial or self._serial.in_waiting <= 0:
             return
 
-        raw_bytes = self._serial.readline()
-        data = self._decode_serial_data(raw_bytes)
-
-        if not data:
+        try:
+            data = self._serial.readline().decode('utf-8', errors='ignore').strip()
+        except UnicodeDecodeError as e:
+            logger.warning(f"Failed to decode serial data: {e}")
             return
 
-        logger.debug(f"RAW ESP32: {repr(data)}")
-
-        if self._is_non_json_response(data):
+        if not data or data.startswith(self.ACK_PREFIX) or not data.startswith(self.JSON_START_CHAR):
             logger.debug(f"Ignoring non-JSON message: {data}")
             return
 
+        logger.debug(f"RAW ESP32: {repr(data)}")
         message = Message.from_serial(data)
         logger.debug(f"Parsed message: type={message.type}")
-
         self._route_message(message)
-
-    def _decode_serial_data(self, raw_bytes: bytes) -> str:
-        try:
-            return raw_bytes.decode('utf-8', errors='ignore').strip()
-        except UnicodeDecodeError:
-            logger.warning(f"Failed to decode bytes: {raw_bytes.hex()}")
-            return ""
-    
-    def _is_non_json_response(self, data: str) -> bool:
-        return data.startswith(self.ACK_PREFIX) or not data.startswith(self.JSON_START_CHAR)
     
     def _route_message(self, message: Message) -> None:
-        message_handlers = {
-            MessageType.EVENT_HEARTBEAT: self._handle_heartbeat,
-            MessageType.RESPONSE_ACK: self._handle_acknowledgment,
-        }
-
-        handler = message_handlers.get(message.type)
-        if handler:
-            handler(message)
-            return
-
-        if self._is_response_message(message):
-            response = Response.from_message(message)
-            self._route_response(response)
-        elif self._is_event_message(message) or message.type == MessageType.EVENT_STATUS:
-            self._route_event(message)
-        elif self._is_command_echo(message):
-            logger.debug(f"Received command echo confirmation: {message.type}")
-            self._last_sent_command_type = None 
-            response = Response(
-                success=True,
-                message=f"Command '{message.type}' confirmed",
-                data=message.payload
-            )
-            self._route_response(response)
-        else:
-            logger.warning(f"Received unexpected message type: {message.type}")
-    
-    def _is_response_message(self, message: Message) -> bool:
-        return message.type in [
+        if message.type == MessageType.EVENT_HEARTBEAT:
+            self._handle_heartbeat(message)
+        elif message.type == MessageType.RESPONSE_ACK:
+            self._handle_acknowledgment(message)
+        elif message.type in (
             MessageType.RESPONSE_SUCCESS,
             MessageType.RESPONSE_ERROR,
-            MessageType.RESPONSE_STATUS,
-        ]
-    
-    def _is_event_message(self, message: Message) -> bool:
-        return message.type.startswith("event_")
-    
-    def _is_command_echo(self, message: Message) -> bool:
-        """Check if the received message is an echo of the last sent command"""
-        return self._last_sent_command_type is not None and message.type == self._last_sent_command_type
+            MessageType.RESPONSE_STATUS
+        ):
+            self._route_response(Response.from_message(message))
+        elif message.type.startswith("event_") or message.type == MessageType.EVENT_STATUS:
+            self._route_event(message)
+        elif self._last_sent_command_type and message.type == self._last_sent_command_type:
+            logger.debug(f"Received command echo confirmation: {message.type}")
+            self._last_sent_command_type = None
+            self._route_response(
+                Response(
+                    success=True,
+                    message=f"Command '{message.type}' confirmed",
+                    data=message.payload
+                )
+            )
+        else:
+            logger.warning(f"Received unexpected message type: {message.type}")
     
     def _route_response(self, response: Response) -> None:
         with self._lock:
@@ -342,9 +280,6 @@ class ArduinoClient:
                 return
 
         logger.debug("Response routed to async callback")
-        self._notify_response_callback(response)
-
-    def _notify_response_callback(self, response: Response) -> None:
         if self._response_callback:
             try:
                 self._response_callback(response)
@@ -353,16 +288,14 @@ class ArduinoClient:
     
     def _route_event(self, event: Message) -> None:
         logger.info(f"Event received: {event.type}")
-        self._notify_event_callback(event)
-
-    def _notify_event_callback(self, event: Message) -> None:
-        if self._event_callback:
-            try:
-                self._event_callback(event)
-            except Exception as e:
-                logger.error(f"Error in event callback: {e}")
-        else:
+        if not self._event_callback:
             logger.debug(f"No event callback registered for: {event.type}")
+            return
+
+        try:
+            self._event_callback(event)
+        except Exception as e:
+            logger.error(f"Error in event callback: {e}")
     
     def _handle_heartbeat(self, message: Message) -> None:
         payload = message.payload
@@ -381,9 +314,9 @@ class ArduinoClient:
     @property
     def is_connected(self) -> bool:
         return (
-            self._status == ConnectionStatus.CONNECTED and
-            self._serial is not None and
-            self._serial.is_open
+            self._status == ConnectionStatus.CONNECTED
+            and self._serial is not None
+            and self._serial.is_open
         )
     
     @property

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Callable
 
 from loguru import logger
 
@@ -27,14 +28,9 @@ class SessionController:
         self._heartbeat_callbacks = CallbackManager[ConnectionHealth]()
         self._ack_callbacks = CallbackManager[AcknowledgmentInfo]()
 
-        self._initialize_lighting_states()
-        self._register_arduino_callbacks()
-
-    def _initialize_lighting_states(self) -> None:
         for channel in settings.lighting_channels:
             self._lighting_states[channel] = LightingState(channel=channel)
 
-    def _register_arduino_callbacks(self) -> None:
         self._arduino_client.set_response_callback(self._handle_response)
         self._arduino_client.set_event_callback(self._handle_event)
         self._arduino_client.set_heartbeat_callback(self._handle_heartbeat)
@@ -43,15 +39,11 @@ class SessionController:
     def connect(self, port: str, baud_rate: int | None = None) -> bool:
         success = self._arduino_client.connect(port, baud_rate)
         self._update_connection_status(self._arduino_client.status)
-
-        self._log_connection_result(success, port)
-        return success
-
-    def _log_connection_result(self, success: bool, port: str) -> None:
         if success:
             logger.info(f"Connected to Arduino on {port}")
         else:
-            logger.error(f"Failed to connect to Arduino on {port}")
+            logger.info(f"Failed to connect to Arduino on {port}")
+        return success
 
     def disconnect(self) -> None:
         self._arduino_client.disconnect()
@@ -62,65 +54,50 @@ class SessionController:
         if not self._arduino_client.is_connected:
             logger.warning("Not connected to Arduino")
             return False
-
-        if channel not in self._lighting_states:
-            logger.error(f"Unknown lighting channel: {channel}")
+        
+        # Validate channel format - ESP32 expects ring_1, ring_2, ring_3, ring_4
+        valid_channels = ["ring_1", "ring_2", "ring_3", "ring_4"]
+        if channel not in valid_channels:
+            logger.error(f"Invalid lighting channel: {channel}. Expected one of {valid_channels}")
             return False
 
-        intensity = self._clamp_intensity(intensity)
-        self._update_lighting_state(channel, intensity)
+        # Ensure channel exists in lighting_states (create if needed for ESP32 channels)
+        if channel not in self._lighting_states:
+            self._lighting_states[channel] = LightingState(channel=channel)
+
+        intensity = max(0, min(intensity, settings.max_lighting_intensity))
+        self._lighting_states[channel].intensity = intensity
+        self._lighting_states[channel].enabled = intensity > 0
 
         response = self._arduino_client.set_lighting(channel, intensity)
-
-        return self._handle_lighting_response(response, channel, intensity)
+        success = response and response.success
+        if success:
+            logger.info(f"Set {channel} lighting to {intensity}")
+        else:
+            logger.info(f"Failed to set {channel} lighting to {intensity}")
+        return success
     
     def set_sections(self, sections: dict[str, int]) -> bool:
-        """Set multiple sections at once"""
         if not self._arduino_client.is_connected:
             logger.warning("Not connected to Arduino")
             return False
         
-        # Validate and clamp all sections
         clamped_sections = {}
         for section, intensity in sections.items():
             if section not in self._lighting_states:
                 logger.error(f"Unknown lighting channel: {section}")
                 return False
-            clamped_sections[section] = self._clamp_intensity(intensity)
+            clamped_sections[section] = max(0, min(intensity, settings.max_lighting_intensity))
+            self._lighting_states[section].intensity = clamped_sections[section]
+            self._lighting_states[section].enabled = clamped_sections[section] > 0
         
-        # Update all states
-        for section, intensity in clamped_sections.items():
-            self._update_lighting_state(section, intensity)
-        
-        # Send single command with all sections
         response = self._arduino_client.set_sections(clamped_sections)
-        
-        if response and response.success:
+        success = response and response.success
+        if success:
             logger.info(f"Set sections lighting: {clamped_sections}")
-            return True
         else:
-            logger.error(f"Failed to set sections lighting")
-            return False
-
-    def _clamp_intensity(self, intensity: int) -> int:
-        return max(0, min(intensity, settings.max_lighting_intensity))
-
-    def _update_lighting_state(self, channel: str, intensity: int) -> None:
-        self._lighting_states[channel].intensity = intensity
-        self._lighting_states[channel].enabled = intensity > 0
-
-    def _handle_lighting_response(
-        self,
-        response: Response | None,
-        channel: str,
-        intensity: int
-    ) -> bool:
-        if response and response.success:
-            logger.info(f"Set {channel} lighting to {intensity}")
-            return True
-        else:
-            logger.error(f"Failed to set {channel} lighting to {intensity}")
-            return False
+            logger.info("Failed to set sections lighting")
+        return success
     
     def get_lighting_state(self, channel: str) -> LightingState | None:
         return self._lighting_states.get(channel)
@@ -128,34 +105,20 @@ class SessionController:
     def get_all_lighting_states(self) -> dict[str, LightingState]:
         return self._lighting_states.copy()
     
-    def start_photo_sequence(
-        self,
-        count: int | None = None,
-        delay: float | None = None
-    ) -> bool:
+    def start_photo_sequence(self, count: int | None = None, delay: float | None = None) -> bool:
         if not self._arduino_client.is_connected:
             logger.warning("Not connected to Arduino")
             return False
 
         count = count or settings.photo_sequence_count
         delay = delay or settings.photo_sequence_delay
-
         response = self._arduino_client.start_photo_sequence(count, delay)
-
-        return self._handle_photo_sequence_response(response, count, delay)
-
-    def _handle_photo_sequence_response(
-        self,
-        response: Response | None,
-        count: int,
-        delay: float
-    ) -> bool:
-        if response and response.success:
+        success = response and response.success
+        if success:
             logger.info(f"Started photo sequence: {count} photos, {delay}s delay")
-            return True
         else:
-            logger.error("Failed to start photo sequence")
-            return False
+            logger.info("Failed to start photo sequence")
+        return success
     
     def ping(self) -> bool:
         if not self._arduino_client.is_connected:
@@ -174,76 +137,74 @@ class SessionController:
         if not self._arduino_client.is_connected:
             logger.warning("Not connected to ESP32")
             return None
-
         response = self._arduino_client.toggle_led()
-
         if response and response.success:
             logger.info("LED toggled successfully")
             return response
-        else:
-            logger.error("Failed to toggle LED")
-            return None
+        logger.info("Failed to toggle LED")
+        return None
 
     def motor_position(self, direction: str, steps: int | None = None) -> bool:
-        return self._execute_command(
-            lambda: self._arduino_client.motor_position(direction, steps),
-            f"Motor moved {direction}",
-            f"Failed to move motor {direction}"
-        )
-
-    def motor_flip(self) -> bool:
-        return self._execute_command(
-            self._arduino_client.motor_flip,
-            "Coin flipped successfully",
-            "Failed to flip coin"
-        )
-
-    def camera_trigger(self, duration: int | None = None) -> bool:
-        return self._execute_command(
-            lambda: self._arduino_client.camera_trigger(duration),
-            "Camera triggered successfully",
-            "Failed to trigger camera"
-        )
-
-    def emergency_stop(self) -> bool:
-        return self._execute_command(
-            self._arduino_client.emergency_stop,
-            "Emergency stop executed",
-            "Failed to execute emergency stop"
-        )
-
-    def _execute_command(
-        self,
-        command_func,
-        success_msg: str,
-        error_msg: str
-    ) -> bool:
         if not self._arduino_client.is_connected:
             logger.warning("Not connected to ESP32")
             return False
-
-        response = command_func()
-
-        if response and response.success:
-            logger.info(success_msg)
-            return True
+        response = self._arduino_client.motor_position(direction, steps)
+        success = response and response.success
+        if success:
+            logger.info(f"Motor moved {direction}")
         else:
-            logger.error(error_msg)
+            logger.info(f"Failed to move motor {direction}")
+        return success
+
+    def motor_flip(self) -> bool:
+        if not self._arduino_client.is_connected:
+            logger.warning("Not connected to ESP32")
             return False
+        response = self._arduino_client.motor_flip()
+        success = response and response.success
+        if success:
+            logger.info("Coin flipped successfully")
+        else:
+            logger.info("Failed to flip coin")
+        return success
+
+    def camera_trigger(self, duration: int | None = None) -> bool:
+        if not self._arduino_client.is_connected:
+            logger.warning("Not connected to ESP32")
+            return False
+        response = self._arduino_client.camera_trigger(duration)
+        success = response and response.success
+        if success:
+            logger.info("Camera triggered successfully")
+        else:
+            logger.info("Failed to trigger camera")
+        return success
+
+    def emergency_stop(self) -> bool:
+        if not self._arduino_client.is_connected:
+            logger.warning("Not connected to ESP32")
+            return False
+        response = self._arduino_client.emergency_stop()
+        success = response and response.success
+        if success:
+            logger.info("Emergency stop executed")
+        else:
+            logger.info("Failed to execute emergency stop")
+        return success
     
-    def add_status_callback(self, callback) -> None:
+    def add_status_callback(self, callback: Callable[[ConnectionStatus], None]) -> None:
         self._status_callbacks.add(callback)
     
-    def add_response_callback(self, callback) -> None:
+    def add_response_callback(self, callback: Callable[[Response], None]) -> None:
         self._response_callbacks.add(callback)
     
-    def add_event_callback(self, callback) -> None:
+    def add_event_callback(self, callback: Callable[[Message], None]) -> None:
         self._event_callbacks.add(callback)
     
-    def add_heartbeat_callback(self, callback) -> None:
+    def add_heartbeat_callback(self, callback: Callable[[ConnectionHealth], None]) -> None:
         self._heartbeat_callbacks.add(callback)
     
-    def add_ack_callback(self, callback) -> None:
+    def add_ack_callback(self, callback: Callable[[AcknowledgmentInfo], None]) -> None:
         self._ack_callbacks.add(callback)
     
     def get_connection_health(self) -> ConnectionHealth:

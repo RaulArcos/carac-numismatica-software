@@ -50,27 +50,33 @@ class PhotoControlPanel(QGroupBox):
         grid = QGridLayout()
         grid.setSpacing(4)
         
-        self._position_forward_btn = QPushButton("Posición ▲")
+        self._position_forward_btn = QPushButton("Mover a Luz")
         self._position_forward_btn.setMinimumHeight(self.BUTTON_HEIGHT_MEDIUM)
         self._position_forward_btn.setMaximumHeight(self.BUTTON_HEIGHT_MEDIUM)
+        self._position_forward_btn.setToolTip("Mueve el motor para poner la moneda bajo la luz")
         self._position_forward_btn.clicked.connect(self.position_forward_requested.emit)
         grid.addWidget(self._position_forward_btn, 0, 0)
         
-        self._position_backward_btn = QPushButton("Posición ▼")
+        self._position_backward_btn = QPushButton("Retornar Moneda")
         self._position_backward_btn.setMinimumHeight(self.BUTTON_HEIGHT_MEDIUM)
         self._position_backward_btn.setMaximumHeight(self.BUTTON_HEIGHT_MEDIUM)
+        self._position_backward_btn.setToolTip("Mueve el motor para retornar la moneda a su posición inicial")
         self._position_backward_btn.clicked.connect(self.position_backward_requested.emit)
         grid.addWidget(self._position_backward_btn, 0, 1)
         
         self._flip_coin_btn = QPushButton("Voltear Moneda")
         self._flip_coin_btn.setMinimumHeight(self.BUTTON_HEIGHT_MEDIUM)
         self._flip_coin_btn.setMaximumHeight(self.BUTTON_HEIGHT_MEDIUM)
+        self._flip_coin_btn.setToolTip("Voltea la moneda usando los servos")
         self._flip_coin_btn.clicked.connect(self.flip_coin_requested.emit)
         grid.addWidget(self._flip_coin_btn, 1, 0, 1, 2)
         
+        # Camera button hidden - camera not connected in first implementation
         self._take_photo_btn = QPushButton("Tomar Foto")
         self._take_photo_btn.setMinimumHeight(self.BUTTON_HEIGHT_MEDIUM)
         self._take_photo_btn.setMaximumHeight(self.BUTTON_HEIGHT_MEDIUM)
+        self._take_photo_btn.setEnabled(False)
+        self._take_photo_btn.setVisible(False)
         self._take_photo_btn.clicked.connect(self.take_photo_requested.emit)
         grid.addWidget(self._take_photo_btn, 2, 0, 1, 2)
         
@@ -87,6 +93,11 @@ class PhotoControlPanel(QGroupBox):
         sequence_label.setObjectName("sectionLabel")
         layout.addWidget(sequence_label)
         
+        info_label = QLabel("Voltea moneda → Espera 5s → Voltea → Retorna")
+        info_label.setObjectName("infoLabel")
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+        
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(4)
         
@@ -94,6 +105,7 @@ class PhotoControlPanel(QGroupBox):
         style_manager.apply_button_style(self._start_button, "start")
         self._start_button.setMinimumHeight(self.BUTTON_HEIGHT_LARGE)
         self._start_button.setMaximumHeight(self.BUTTON_HEIGHT_LARGE)
+        self._start_button.setToolTip("Ejecuta: voltear → esperar 5s → voltear → retornar moneda")
         self._start_button.clicked.connect(self.start_sequence_requested.emit)
         buttons_layout.addWidget(self._start_button)
         

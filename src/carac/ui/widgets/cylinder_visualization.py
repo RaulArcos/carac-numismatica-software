@@ -15,25 +15,21 @@ class CylinderVisualization(QWidget):
         super().__init__(parent)
         self.setMinimumSize(self.MIN_WIDTH, self.MIN_HEIGHT)
         self.setMaximumSize(self.MAX_WIDTH, self.MAX_HEIGHT)
-        # Store intensities as [ring][section]
         self._section_intensities: list[list[int]] = [[0] * self.SECTION_COUNT for _ in range(self.RING_COUNT)]
         
     def set_ring_intensity(self, ring_index: int, intensity: int) -> None:
-        """Set all sections of a ring to the same intensity (legacy compatibility)"""
         if 0 <= ring_index < self.RING_COUNT:
             for section in range(self.SECTION_COUNT):
                 self._section_intensities[ring_index][section] = max(0, min(255, intensity))
             self.update()
     
     def set_section_intensities(self, intensities: list[list[int]]) -> None:
-        """Set section intensities for all rings. intensities[ring_index][section_index]"""
         for ring_idx in range(min(len(intensities), self.RING_COUNT)):
             for section_idx in range(min(len(intensities[ring_idx]), self.SECTION_COUNT)):
                 self._section_intensities[ring_idx][section_idx] = max(0, min(255, intensities[ring_idx][section_idx]))
         self.update()
     
     def set_all_intensities(self, intensities: list[int]) -> None:
-        """Set all sections of all rings (legacy compatibility)"""
         for index, intensity in enumerate(intensities[:self.RING_COUNT]):
             self.set_ring_intensity(index, intensity)
     
@@ -85,29 +81,20 @@ class CylinderVisualization(QWidget):
         ring_start_y = coin_y - 30
         ring_width = 70
         ring_height = 18
-        ring_thickness = 4  # Thickness of the LED ring perimeter
+        ring_thickness = 4
         
         for i in range(self.RING_COUNT):
             y = ring_start_y - i * ring_spacing
             reversed_index = self.RING_COUNT - 1 - i
             
-            # Define the ring rectangle
             ring_rect_x = center_x - ring_width // 2
             ring_rect_y = y - ring_height // 2
             
-            # Draw each quadrant section (4 sections divided by a cross)
-            # Section 0: Right quadrant (0° to 90°, or -45° to 45° from center right)
-            # Section 1: Top quadrant (90° to 180°, or 45° to 135° from center right)
-            # Section 2: Left quadrant (180° to 270°, or 135° to 225° from center right)
-            # Section 3: Bottom quadrant (270° to 360°, or 225° to 315° from center right)
-            
-            # Qt uses angles in 1/16th of a degree, starting from 3 o'clock position (right)
-            # and going counter-clockwise
             section_angles = [
-                (315 * 16, 90 * 16),   # Section 1: Right quadrant (-45° to 45°)
-                (45 * 16, 90 * 16),    # Section 2: Top quadrant (45° to 135°)
-                (135 * 16, 90 * 16),   # Section 3: Left quadrant (135° to 225°)
-                (225 * 16, 90 * 16),   # Section 4: Bottom quadrant (225° to 315°)
+                (315 * 16, 90 * 16),
+                (45 * 16, 90 * 16),
+                (135 * 16, 90 * 16),
+                (225 * 16, 90 * 16),
             ]
             
             for section_idx in range(self.SECTION_COUNT):
@@ -117,7 +104,6 @@ class CylinderVisualization(QWidget):
                 
                 start_angle, span_angle = section_angles[section_idx]
                 
-                # Draw outer arc
                 painter.setPen(QPen(color, ring_thickness, Qt.SolidLine, Qt.RoundCap))
                 painter.setBrush(Qt.NoBrush)
                 painter.drawArc(
@@ -129,7 +115,6 @@ class CylinderVisualization(QWidget):
                     span_angle
                 )
             
-            # Draw ring outline (thin border)
             painter.setBrush(Qt.NoBrush)
             painter.setPen(QPen(QColor(0, 96, 124), 1))
             painter.drawEllipse(
@@ -139,7 +124,6 @@ class CylinderVisualization(QWidget):
                 ring_height
             )
             
-            # Draw ring label
             painter.setPen(QPen(QColor(60, 60, 60), 1))
             painter.drawText(
                 int(center_x + ring_width // 2 + 8),

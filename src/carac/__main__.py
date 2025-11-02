@@ -6,21 +6,15 @@ from carac.logging_config import setup_logging
 from carac.ui.main_window import MainWindow
 from carac.version import __version__
 
-APPLICATION_NAME = "Carac"
-ORGANIZATION_NAME = "Carac Numismatic Software"
-
 
 def main() -> None:
     setup_logging()
-    
     app = QApplication(sys.argv)
-    app.setApplicationName(APPLICATION_NAME)
+    app.setApplicationName("Carac")
     app.setApplicationVersion(__version__)
-    app.setOrganizationName(ORGANIZATION_NAME)
-    
+    app.setOrganizationName("Carac Numismatic Software")
     window = MainWindow()
     window.show()
-    
     sys.exit(app.exec())
 
 

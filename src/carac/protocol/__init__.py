@@ -1,23 +1,15 @@
 from .models import (
-    Command,
-    Response,
-    CommandType,
     ConnectionStatus,
-    LightingCommand,
-    PhotoSequenceCommand,
-    PingCommand,
-    StatusCommand,
-    LedToggleCommand,
+    ErrorCode,
+    Message,
+    MessageType,
+    Response,
 )
 
 __all__ = [
-    "Command",
-    "Response",
-    "CommandType",
     "ConnectionStatus",
-    "LightingCommand",
-    "PhotoSequenceCommand",
-    "PingCommand",
-    "StatusCommand",
-    "LedToggleCommand",
+    "ErrorCode",
+    "Message",
+    "MessageType",
+    "Response",
 ]

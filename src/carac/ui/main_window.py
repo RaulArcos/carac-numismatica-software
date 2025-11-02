@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
 
 from ..config.settings import settings
 from ..controllers.session_controller import SessionController
-from ..protocol.models import ConnectionStatus, Message, Response
+from ..protocol.models import ConnectionStatus, Message, MessageType, Response
 from ..serialio.connection_monitor import AcknowledgmentInfo, ConnectionHealth
 from .services import PortService, PresetService
 from .services.port_service import PortRefreshThread
@@ -50,6 +50,9 @@ class MainWindow(QMainWindow):
         self._session_controller = SessionController()
         self._port_refresh_timer = QTimer()
         self._port_refresh_thread = PortRefreshThread()
+        self._sequence_timer = QTimer()
+        self._sequence_step = 0
+        self._sequence_running = False
         self._current_section_intensities: dict[str, int] = {
             "section1": 0,
             "section2": 0,
@@ -70,47 +73,26 @@ class MainWindow(QMainWindow):
     
     def _setup_window(self) -> None:
         self.setWindowTitle(self.WINDOW_TITLE)
-        self.setGeometry(
-            self.WINDOW_X,
-            self.WINDOW_Y,
-            self.WINDOW_WIDTH,
-            self.WINDOW_HEIGHT
-        )
+        self.setGeometry(self.WINDOW_X, self.WINDOW_Y, self.WINDOW_WIDTH, self.WINDOW_HEIGHT)
         self.setMinimumSize(self.MIN_WIDTH, self.MIN_HEIGHT)
-        self._load_window_icon()
-    
-    def _load_window_icon(self) -> None:
+        
         icon_paths = [
             Path(__file__).parent.parent.parent / "assets" / "ui" / "logo.png",
             Path.cwd() / "assets" / "ui" / "logo.png",
         ]
-
         for icon_path in icon_paths:
-            if self._try_load_icon(icon_path):
+            if icon_path.exists():
+                self.setWindowIcon(QIcon(str(icon_path)))
+                logger.info(f"Application icon loaded from: {icon_path}")
                 return
-
         logger.warning("Application icon not found")
-
-    def _try_load_icon(self, icon_path: Path) -> bool:
-        if icon_path.exists():
-            self.setWindowIcon(QIcon(str(icon_path)))
-            logger.info(f"Application icon loaded from: {icon_path}")
-            return True
-        return False
     
     def _setup_ui(self) -> None:
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(
-            self.LAYOUT_MARGIN,
-            self.LAYOUT_MARGIN,
-            self.LAYOUT_MARGIN,
-            self.LAYOUT_MARGIN
-        )
+        main_layout.setContentsMargins(self.LAYOUT_MARGIN, self.LAYOUT_MARGIN, self.LAYOUT_MARGIN, self.LAYOUT_MARGIN)
         main_layout.setSpacing(self.LAYOUT_SPACING)
-        
         main_layout.addWidget(self._create_header())
         main_layout.addLayout(self._create_content_layout(), 1)
     
@@ -264,18 +246,10 @@ class MainWindow(QMainWindow):
         if not port:
             QMessageBox.warning(self, "Error", "Por favor selecciona un puerto")
             return
-
         port = PortService.clean_port_name(port)
         self._log_panel.add_message(f"Conectando a {port}...")
-
         success = self._session_controller.connect(port, settings.default_baud_rate)
-        self._log_connection_result(success)
-
-    def _log_connection_result(self, success: bool) -> None:
-        if success:
-            self._log_panel.add_message("Conectado exitosamente")
-        else:
-            self._log_panel.add_message("Error de conexión", is_error=True)
+        self._log_panel.add_message("Conectado exitosamente" if success else "Error de conexión", is_error=not success)
     
     def _on_connection_status_changed(self, status: ConnectionStatus) -> None:
         if status == ConnectionStatus.CONNECTED:
@@ -299,46 +273,62 @@ class MainWindow(QMainWindow):
             self._heartbeat_card.set_value("—", "inactive")
     
     def _on_section_changed(self, section_index: int, intensity: int) -> None:
-        """Called when a section slider is moved - sends all sections to ESP32"""
         self._preset_panel.clear_selection()
         
-        # Update the changed section in our state
-        section_key = f"section{section_index + 1}"
-        self._current_section_intensities[section_key] = intensity
-        
+        # When a section slider changes, update all rings with that intensity
+        # ESP32 expects ring_1 through ring_4 channels
         if self._session_controller.is_connected:
-            # Send all sections at once
-            success = self._session_controller.set_sections(self._current_section_intensities)
+            success_count = 0
+            for ring_idx in range(1, 5):
+                ring_channel = f"ring_{ring_idx}"
+                success = self._session_controller.set_lighting(ring_channel, intensity)
+                if success:
+                    success_count += 1
             
-            if success:
+            if success_count == 4:
                 normalized = intensity / 255.0
-                self._log_panel.add_message(f"Sección {section_index + 1} configurada a {normalized:.2f}")
+                self._log_panel.add_message(f"Sección {section_index + 1} configurada a {normalized:.2f} (todos los anillos)")
             else:
-                self._log_panel.add_message(f"Error al configurar Sección {section_index + 1}", is_error=True)
+                self._log_panel.add_message(
+                    f"Error al configurar Sección {section_index + 1} ({success_count}/4 anillos)",
+                    is_error=True
+                )
     
     def _on_preset_selected(self, preset_name: str, preset_values: dict[str, int]) -> None:
         self._lighting_panel.set_all_values(preset_values)
         
-        # Extract section intensities from ring1 (all rings have same values per section)
-        sections_to_send = {}
-        for section_idx in range(1, 5):
-            channel = f"ring1_section{section_idx}"
-            if channel in preset_values:
-                intensity = preset_values[channel]
-                section_key = f"section{section_idx}"
-                sections_to_send[section_key] = intensity
-                # Update internal state
-                self._current_section_intensities[section_key] = intensity
+        # Convert preset values (ring{ring}_section{section}) to ESP32 format (ring_{ring})
+        # Aggregate section values per ring (average intensity across all sections)
+        ring_intensities: dict[str, int] = {}
         
-        # Send all sections in one command if connected
-        if self._session_controller.is_connected:
-            success = self._session_controller.set_sections(sections_to_send)
+        for ring_idx in range(1, 5):
+            ring_key = f"ring_{ring_idx}"
+            section_values = []
             
-            if success:
-                self._log_panel.add_message(f"Perfil '{preset_name}' aplicado (4 secciones configuradas)")
+            # Collect all section values for this ring
+            for section_idx in range(1, 5):
+                preset_key = f"ring{ring_idx}_section{section_idx}"
+                if preset_key in preset_values:
+                    section_values.append(preset_values[preset_key])
+            
+            # Calculate average intensity for this ring
+            if section_values:
+                avg_intensity = sum(section_values) // len(section_values)
+                ring_intensities[ring_key] = avg_intensity
+        
+        if self._session_controller.is_connected:
+            # Send individual lighting_set commands for each ring
+            success_count = 0
+            for ring_channel, intensity in ring_intensities.items():
+                success = self._session_controller.set_lighting(ring_channel, intensity)
+                if success:
+                    success_count += 1
+            
+            if success_count == len(ring_intensities):
+                self._log_panel.add_message(f"Perfil '{preset_name}' aplicado ({len(ring_intensities)} anillos configurados)")
             else:
                 self._log_panel.add_message(
-                    f"Perfil '{preset_name}' aplicado con errores",
+                    f"Perfil '{preset_name}' aplicado con errores ({success_count}/{len(ring_intensities)} anillos)",
                     is_error=True
                 )
         else:
@@ -347,53 +337,136 @@ class MainWindow(QMainWindow):
     def _on_position_forward(self) -> None:
         if not self._check_connected():
             return
-        self._log_panel.add_message("Moviendo posición hacia adelante...")
+        self._log_panel.add_message("Moviendo moneda bajo la luz...")
         success = self._session_controller.motor_position("forward")
-        if success:
-            self._log_panel.add_message("Posición adelantada")
-        else:
-            self._log_panel.add_message("Error al mover posición", is_error=True)
+        self._log_panel.add_message("Moneda posicionada bajo la luz" if success else "Error al mover moneda", is_error=not success)
     
     def _on_position_backward(self) -> None:
         if not self._check_connected():
             return
-        self._log_panel.add_message("Moviendo posición hacia atrás...")
+        self._log_panel.add_message("Retornando moneda...")
         success = self._session_controller.motor_position("backward")
-        if success:
-            self._log_panel.add_message("Posición retrocedida")
-        else:
-            self._log_panel.add_message("Error al mover posición", is_error=True)
+        self._log_panel.add_message("Moneda retornada" if success else "Error al retornar moneda", is_error=not success)
     
     def _on_flip_coin(self) -> None:
         if not self._check_connected():
             return
         self._log_panel.add_message("Volteando moneda...")
         success = self._session_controller.motor_flip()
-        if success:
-            self._log_panel.add_message("Moneda volteada")
-        else:
-            self._log_panel.add_message("Error al voltear moneda", is_error=True)
+        self._log_panel.add_message("Moneda volteada" if success else "Error al voltear moneda", is_error=not success)
     
     def _on_take_photo(self) -> None:
         if not self._check_connected():
             return
         self._log_panel.add_message("Tomando fotografía...")
         success = self._session_controller.camera_trigger()
-        if success:
-            self._log_panel.add_message("Foto capturada")
-        else:
-            self._log_panel.add_message("Error al tomar foto", is_error=True)
+        self._log_panel.add_message("Foto capturada" if success else "Error al tomar foto", is_error=not success)
     
     def _on_start_sequence(self) -> None:
         if not self._check_connected():
             return
         
+        if self._sequence_running:
+            self._log_panel.add_message("Secuencia ya en ejecución", is_error=True)
+            return
+        
         self._log_panel.add_message("Iniciando secuencia completa...")
         self._photo_panel.set_sequence_active(True)
         self._arduino_card.set_value("En proceso", "progress")
+        self._sequence_running = True
+        self._sequence_step = 0
+        
+        # Connect timer to sequence step handler
+        self._sequence_timer.timeout.connect(self._execute_sequence_step)
+        self._sequence_timer.setSingleShot(True)
+        
+        # Start with first flip
+        self._execute_sequence_step()
+    
+    def _execute_sequence_step(self) -> None:
+        """Execute next step in the sequence: flip → wait 5s → flip → return"""
+        if not self._sequence_running:
+            return
+        
+        # Check connection before each step
+        if not self._session_controller.is_connected:
+            self._log_panel.add_message("Conexión perdida durante la secuencia", is_error=True)
+            self._sequence_running = False
+            self._photo_panel.set_sequence_active(False)
+            self._sequence_step = 0
+            try:
+                self._sequence_timer.timeout.disconnect()
+            except RuntimeError:
+                pass  # Already disconnected
+            return
+        
+        if self._sequence_step == 0:
+            # First flip
+            self._log_panel.add_message("Paso 1/4: Volteando moneda (primera vez)...")
+            success = self._session_controller.motor_flip()
+            if success:
+                self._sequence_step = 1
+                # Wait 5 seconds before next flip
+                self._sequence_timer.start(5000)  # 5000 ms = 5 seconds
+            else:
+                self._log_panel.add_message("Error en el primer volteo", is_error=True)
+                self._sequence_running = False
+                self._photo_panel.set_sequence_active(False)
+                self._arduino_card.set_value("Error", "disconnected")
+                try:
+                    self._sequence_timer.timeout.disconnect()
+                except RuntimeError:
+                    pass
+        elif self._sequence_step == 1:
+            # Wait completed, second flip
+            self._log_panel.add_message("Paso 2/4: Espera completada (5s)")
+            self._log_panel.add_message("Paso 3/4: Volteando moneda (segunda vez)...")
+            success = self._session_controller.motor_flip()
+            if success:
+                self._sequence_step = 2
+                # Small delay before returning
+                self._sequence_timer.start(1000)  # 1 second delay
+            else:
+                self._log_panel.add_message("Error en el segundo volteo", is_error=True)
+                self._sequence_running = False
+                self._photo_panel.set_sequence_active(False)
+                self._arduino_card.set_value("Error", "disconnected")
+                try:
+                    self._sequence_timer.timeout.disconnect()
+                except RuntimeError:
+                    pass
+        elif self._sequence_step == 2:
+            # Return coin
+            self._log_panel.add_message("Paso 4/4: Retornando moneda...")
+            success = self._session_controller.motor_position("backward")
+            if success:
+                self._log_panel.add_message("✓ Secuencia completada exitosamente")
+                self._arduino_card.set_value("Operativo", "operational")
+            else:
+                self._log_panel.add_message("Error al retornar moneda", is_error=True)
+                self._arduino_card.set_value("Error", "disconnected")
+            
+            # Sequence complete
+            self._sequence_running = False
+            self._photo_panel.set_sequence_active(False)
+            self._sequence_step = 0
+            try:
+                self._sequence_timer.timeout.disconnect()
+            except RuntimeError:
+                pass  # Already disconnected
     
     def _on_stop_sequence(self) -> None:
+        if not self._sequence_running:
+            return
+        
         self._log_panel.add_message("Deteniendo secuencia...", is_error=True)
+        self._sequence_running = False
+        self._sequence_step = 0
+        self._sequence_timer.stop()
+        try:
+            self._sequence_timer.timeout.disconnect()
+        except RuntimeError:
+            pass  # Already disconnected
         self._photo_panel.set_sequence_active(False)
         self._arduino_card.set_value("Operativo", "operational")
     
@@ -437,12 +510,7 @@ class MainWindow(QMainWindow):
             self._log_panel.add_message(f"Error ESP32: {response.message}", is_error=True)
             self._arduino_card.set_value("Error", "disconnected")
     
-    def _on_esp32_event(self, event) -> None:
-        from ..protocol.models import Message, MessageType
-        
-        if not isinstance(event, Message):
-            return
-        
+    def _on_esp32_event(self, event: Message) -> None:
         logger.info(f"ESP32 Event: {event.type}")
         
         if event.type == MessageType.EVENT_STATUS:
@@ -489,42 +557,23 @@ class MainWindow(QMainWindow):
     
     def _on_heartbeat_received(self, health: ConnectionHealth) -> None:
         if health.is_alive:
-            self._handle_alive_heartbeat(health)
+            self._heartbeat_card.set_value("Active", "connected")
+            if health.heartbeat_count % 10 == 0:
+                uptime_seconds = health.esp32_uptime_ms / 1000
+                if uptime_seconds < 60:
+                    uptime_str = f"{uptime_seconds:.0f}s"
+                elif uptime_seconds < 3600:
+                    uptime_str = f"{uptime_seconds / 60:.1f}m"
+                else:
+                    uptime_str = f"{uptime_seconds / 3600:.1f}h"
+                logger.debug(f"Heartbeat #{health.heartbeat_count}: uptime={uptime_str}")
         else:
-            self._handle_lost_heartbeat()
-
-    def _handle_alive_heartbeat(self, health: ConnectionHealth) -> None:
-        self._heartbeat_card.set_value("Active", "connected")
-
-        if health.heartbeat_count % 10 == 0:
-            uptime_str = self._format_uptime(health.esp32_uptime_ms)
-            logger.debug(f"Heartbeat #{health.heartbeat_count}: uptime={uptime_str}")
-
-    def _handle_lost_heartbeat(self) -> None:
-        self._heartbeat_card.set_value("dead", "disconnected")
-        self._log_panel.add_message(
-            "⚠ Conexión perdida - sin heartbeat",
-            is_error=True
-        )
-        logger.warning("Heartbeat timeout - connection lost")
-
-    def _format_uptime(self, uptime_ms: int) -> str:
-        uptime_seconds = uptime_ms / 1000
-
-        if uptime_seconds < 60:
-            return f"{uptime_seconds:.0f}s"
-        elif uptime_seconds < 3600:
-            minutes = uptime_seconds / 60
-            return f"{minutes:.1f}m"
-        else:
-            hours = uptime_seconds / 3600
-            return f"{hours:.1f}h"
+            self._heartbeat_card.set_value("dead", "disconnected")
+            self._log_panel.add_message("⚠ Conexión perdida - sin heartbeat", is_error=True)
+            logger.warning("Heartbeat timeout - connection lost")
     
     def _on_acknowledgment_received(self, ack: AcknowledgmentInfo) -> None:
-        logger.debug(
-            f"✓ Command '{ack.received_type}' acknowledged "
-            f"(RTT: {ack.round_trip_ms:.1f}ms)"
-        )
+        logger.debug(f"✓ Command '{ack.received_type}' acknowledged (RTT: {ack.round_trip_ms:.1f}ms)")
     
     def _check_connected(self) -> bool:
         if not self._session_controller.is_connected:
@@ -533,17 +582,16 @@ class MainWindow(QMainWindow):
         return True
     
     def closeEvent(self, event) -> None:
-        self._cleanup()
-        event.accept()
-
-    def _cleanup(self) -> None:
+        if self._sequence_running:
+            self._sequence_timer.stop()
+            try:
+                self._sequence_timer.timeout.disconnect()
+            except RuntimeError:
+                pass
         if self._session_controller.is_connected:
             self._session_controller.disconnect()
-
-        self._stop_port_refresh()
-
-    def _stop_port_refresh(self) -> None:
         self._port_refresh_timer.stop()
         if self._port_refresh_thread.isRunning():
             self._port_refresh_thread.quit()
             self._port_refresh_thread.wait()
+        event.accept()
