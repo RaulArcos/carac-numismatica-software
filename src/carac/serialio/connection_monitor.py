@@ -26,7 +26,7 @@ class AcknowledgmentInfo:
 
 
 class ConnectionMonitor:
-    CHECK_INTERVAL_SECONDS = 1.0
+    CHECK_INTERVAL_SECONDS = 2.0
     THREAD_JOIN_TIMEOUT_SECONDS = 2.0
 
     @property

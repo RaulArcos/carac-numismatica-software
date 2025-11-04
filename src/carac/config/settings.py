@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     log_retention_days: int = Field(default=30)
     photo_sequence_delay: float = Field(default=1.0)
     photo_sequence_count: int = Field(default=5)
+    
+    port_refresh_interval_ms: int = Field(default=10000)
+    low_performance_mode: bool = Field(default=False)
 
     @property
     def log_directory(self) -> Path:

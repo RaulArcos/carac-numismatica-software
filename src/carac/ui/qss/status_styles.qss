@@ -1,6 +1,3 @@
-/* Status-related styling for CARAC UCA interface */
-
-/* Connection Status Labels */
 QLabel#statusConnected {
     color: #00607C;
     background: #e3f2fd;
@@ -41,7 +38,6 @@ QLabel#statusError {
     border-radius: 6px;
 }
 
-/* System Info Labels */
 QLabel#systemInfoNormal {
     color: #00607C;
     font-weight: 600;
@@ -74,10 +70,9 @@ QLabel#systemInfoEmergency {
     border-radius: 4px;
 }
 
-/* Status Card Value Labels */
 QLabel#cardValueConnected {
     color: #00607C; 
-    font-size: 18pt; 
+    font-size: 14pt; 
     font-weight: 700;
     background: transparent;
     border: none;
@@ -85,7 +80,7 @@ QLabel#cardValueConnected {
 
 QLabel#cardValueDisconnected {
     color: #8C8984; 
-    font-size: 18pt; 
+    font-size: 14pt; 
     font-weight: 700;
     background: transparent;
     border: none;
@@ -93,7 +88,7 @@ QLabel#cardValueDisconnected {
 
 QLabel#cardValueConnecting {
     color: #DD7500; 
-    font-size: 18pt; 
+    font-size: 14pt; 
     font-weight: 700;
     background: transparent;
     border: none;
@@ -101,7 +96,7 @@ QLabel#cardValueConnecting {
 
 QLabel#cardValueOperational {
     color: #00607C; 
-    font-size: 18pt; 
+    font-size: 14pt; 
     font-weight: 700;
     background: transparent;
     border: none;
@@ -109,7 +104,7 @@ QLabel#cardValueOperational {
 
 QLabel#cardValueProgress {
     color: #DD7500; 
-    font-size: 18pt; 
+    font-size: 14pt; 
     font-weight: 700;
     background: transparent;
     border: none;
@@ -117,7 +112,7 @@ QLabel#cardValueProgress {
 
 QLabel#cardValueDefault {
     color: #00607C; 
-    font-size: 18pt; 
+    font-size: 14pt; 
     font-weight: 700;
     background: transparent;
     border: none;
@@ -125,17 +120,29 @@ QLabel#cardValueDefault {
 
 QLabel#cardValueInactive {
     color: #8C8984; 
-    font-size: 18pt; 
+    font-size: 14pt; 
     font-weight: 700;
     background: transparent;
     border: none;
 }
 
-/* Card Titles */
 QLabel#cardTitle {
     color: #8C8984; 
-    font-size: 10pt; 
+    font-size: 8pt; 
     font-weight: 500;
     background: transparent;
     border: none;
+}
+
+QLabel#weightValue {
+    color: #00607C;
+    font-size: 20pt;
+    font-weight: bold;
+    padding: 8px;
+}
+
+QLabel#weightUnit {
+    color: #8C8984;
+    font-size: 10pt;
+    font-weight: 500;
 }

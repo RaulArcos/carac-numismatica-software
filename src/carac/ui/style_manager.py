@@ -6,10 +6,35 @@ from loguru import logger
 class StyleManager:
     QSS_FILES = ["uca_theme.qss", "status_styles.qss", "button_styles.qss"]
     STYLE_MAPS = {
-        "status": {"connected": "statusConnected", "disconnected": "statusDisconnected", "connecting": "statusConnecting", "error": "statusError"},
-        "system_info": {"normal": "systemInfoNormal", "connected": "systemInfoConnected", "disconnected": "systemInfoDisconnected", "emergency": "systemInfoEmergency"},
-        "card_value": {"connected": "cardValueConnected", "disconnected": "cardValueDisconnected", "connecting": "cardValueConnecting", "operational": "cardValueOperational", "progress": "cardValueProgress", "default": "cardValueDefault", "inactive": "cardValueInactive"},
-        "button": {"disconnect": "disconnectButton", "emergency": "emergencyButton", "start": "startButton", "warning": "warningButton", "secondary": "secondaryButton", "preset_selected": "presetSelectedButton"}
+        "status": {
+            "connected": "statusConnected",
+            "disconnected": "statusDisconnected",
+            "connecting": "statusConnecting",
+            "error": "statusError"
+        },
+        "system_info": {
+            "normal": "systemInfoNormal",
+            "connected": "systemInfoConnected",
+            "disconnected": "systemInfoDisconnected",
+            "emergency": "systemInfoEmergency"
+        },
+        "card_value": {
+            "connected": "cardValueConnected",
+            "disconnected": "cardValueDisconnected",
+            "connecting": "cardValueConnecting",
+            "operational": "cardValueOperational",
+            "progress": "cardValueProgress",
+            "default": "cardValueDefault",
+            "inactive": "cardValueInactive"
+        },
+        "button": {
+            "disconnect": "disconnectButton",
+            "emergency": "emergencyButton",
+            "start": "startButton",
+            "warning": "warningButton",
+            "secondary": "secondaryButton",
+            "preset_selected": "presetSelectedButton"
+        }
     }
 
     def __init__(self) -> None:

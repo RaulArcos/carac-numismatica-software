@@ -29,11 +29,13 @@ class ArduinoClient:
     DEFAULT_COMMAND_TIMEOUT = 2.0
     RECONNECT_DELAY = 0.5
     HANDSHAKE_DELAY = 0.2
-    READ_LOOP_DELAY = 0.01
+    READ_LOOP_DELAY = 0.05
     THREAD_JOIN_TIMEOUT = 1.0
     COMMUNICATION_TEST_TIMEOUT = 5.0
     JSON_START_CHAR = "{"
     ACK_PREFIX = "ACK:"
+    MAX_CONSECUTIVE_ERRORS = 10
+    ERROR_DELAY_MULTIPLIER = 2
 
     def __init__(self) -> None:
         self._serial: serial.Serial | None = None
@@ -215,14 +217,23 @@ class ArduinoClient:
         self._read_thread.start()
     
     def _read_loop(self) -> None:
+        consecutive_errors = 0
+        
         while not self._stop_reading and self._serial and self._serial.is_open:
             try:
                 self._process_serial_data()
+                consecutive_errors = 0
                 time.sleep(self.READ_LOOP_DELAY)
 
             except Exception as e:
-                logger.error(f"Error in read loop: {e}")
-                time.sleep(self.READ_LOOP_DELAY)
+                consecutive_errors += 1
+                logger.error(f"Error in read loop: {e} (consecutive errors: {consecutive_errors})")
+                
+                if consecutive_errors >= self.MAX_CONSECUTIVE_ERRORS:
+                    logger.error(f"Too many consecutive errors ({consecutive_errors}), stopping read loop")
+                    break
+                
+                time.sleep(self.READ_LOOP_DELAY * self.ERROR_DELAY_MULTIPLIER)
 
         logger.debug("Read loop stopped")
 

@@ -6,10 +6,10 @@ from PySide6.QtWidgets import QWidget
 class CylinderVisualization(QWidget):
     RING_COUNT = 4
     SECTION_COUNT = 4
-    MIN_WIDTH = 120
-    MIN_HEIGHT = 200
-    MAX_WIDTH = 140
-    MAX_HEIGHT = 220
+    MIN_WIDTH = 100
+    MIN_HEIGHT = 170
+    MAX_WIDTH = 120
+    MAX_HEIGHT = 185
     
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -34,12 +34,15 @@ class CylinderVisualization(QWidget):
             self.set_ring_intensity(index, intensity)
     
     def paintEvent(self, event) -> None:
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        
-        self._draw_base(painter)
-        self._draw_coin(painter)
-        self._draw_rings(painter)
+        try:
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.Antialiasing)
+            
+            self._draw_base(painter)
+            self._draw_coin(painter)
+            self._draw_rings(painter)
+        except Exception:
+            pass
     
     def _draw_base(self, painter: QPainter) -> None:
         center_x = self.width() // 2

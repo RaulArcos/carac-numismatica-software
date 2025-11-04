@@ -28,6 +28,7 @@ class MessageType(str, Enum):
     EVENT_CAMERA_TRIGGERED = "event_camera_triggered"
     EVENT_HEARTBEAT = "event_heartbeat"
     EVENT_STATUS = "status"
+    EVENT_WEIGHT_READING = "event_weight_reading"
     RESPONSE_ACK = "response_ack"
 
 

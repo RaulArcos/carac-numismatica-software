@@ -1,4 +1,4 @@
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QGroupBox,
@@ -16,15 +16,16 @@ from .cylinder_visualization import CylinderVisualization
 class LightingControl(QFrame):
     value_changed = Signal(int)
     
-    VALUE_LABEL_MIN_WIDTH = 30
-    SECTION_INDICATOR_WIDTH = 36
-    NORMALIZED_INPUT_WIDTH = 50
-    SLIDER_MIN_HEIGHT = 20
+    VALUE_LABEL_MIN_WIDTH = 26
+    SECTION_INDICATOR_WIDTH = 30
+    NORMALIZED_INPUT_WIDTH = 42
+    SLIDER_MIN_HEIGHT = 18
     LAYOUT_SPACING_SMALL = 2
-    LAYOUT_SPACING_MEDIUM = 6
-    LAYOUT_MARGIN = 4
+    LAYOUT_SPACING_MEDIUM = 5
+    LAYOUT_MARGIN = 3
     MAX_INTENSITY = 255
     SLIDER_MAX = 100
+    SLIDER_THROTTLE_MS = 100
     
     def __init__(
         self,
@@ -34,6 +35,10 @@ class LightingControl(QFrame):
     ) -> None:
         super().__init__(parent)
         self._section_number = section_number
+        self._pending_value: int | None = None
+        self._throttle_timer = QTimer()
+        self._throttle_timer.setSingleShot(True)
+        self._throttle_timer.timeout.connect(self._emit_pending_value)
         self._setup_ui(section_name)
     
     def _setup_ui(self, section_name: str) -> None:
@@ -97,7 +102,15 @@ class LightingControl(QFrame):
         self._normalized_input.setText(f"{normalized:.2f}")
         self._normalized_input.blockSignals(False)
         
-        self.value_changed.emit(intensity_255)
+        self._pending_value = intensity_255
+        if not self._throttle_timer.isActive():
+            self._emit_pending_value()
+        self._throttle_timer.start(self.SLIDER_THROTTLE_MS)
+    
+    def _emit_pending_value(self) -> None:
+        if self._pending_value is not None:
+            self.value_changed.emit(self._pending_value)
+            self._pending_value = None
     
     def _on_normalized_input_changed(self) -> None:
         try:
@@ -158,8 +171,8 @@ class LightingControlPanel(QGroupBox):
     
     def _setup_ui(self) -> None:
         layout = QHBoxLayout(self)
-        layout.setSpacing(10)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+        layout.setContentsMargins(6, 6, 6, 6)
         
         viz_layout = QVBoxLayout()
         viz_layout.setContentsMargins(0, 0, 0, 0)

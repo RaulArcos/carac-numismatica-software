@@ -18,6 +18,8 @@ class LightingState:
 
 
 class SessionController:
+    _VALID_CHANNELS = ["ring_1", "ring_2", "ring_3", "ring_4"]
+    
     def __init__(self) -> None:
         self._arduino_client = ArduinoClient()
         self._lighting_states: dict[str, LightingState] = {}
@@ -55,13 +57,10 @@ class SessionController:
             logger.warning("Not connected to Arduino")
             return False
         
-        # Validate channel format - ESP32 expects ring_1, ring_2, ring_3, ring_4
-        valid_channels = ["ring_1", "ring_2", "ring_3", "ring_4"]
-        if channel not in valid_channels:
-            logger.error(f"Invalid lighting channel: {channel}. Expected one of {valid_channels}")
+        if channel not in self._VALID_CHANNELS:
+            logger.error(f"Invalid lighting channel: {channel}. Expected one of {self._VALID_CHANNELS}")
             return False
 
-        # Ensure channel exists in lighting_states (create if needed for ESP32 channels)
         if channel not in self._lighting_states:
             self._lighting_states[channel] = LightingState(channel=channel)
 
@@ -87,9 +86,10 @@ class SessionController:
             if section not in self._lighting_states:
                 logger.error(f"Unknown lighting channel: {section}")
                 return False
-            clamped_sections[section] = max(0, min(intensity, settings.max_lighting_intensity))
-            self._lighting_states[section].intensity = clamped_sections[section]
-            self._lighting_states[section].enabled = clamped_sections[section] > 0
+            clamped_intensity = max(0, min(intensity, settings.max_lighting_intensity))
+            clamped_sections[section] = clamped_intensity
+            self._lighting_states[section].intensity = clamped_intensity
+            self._lighting_states[section].enabled = clamped_intensity > 0
         
         response = self._arduino_client.set_sections(clamped_sections)
         success = response and response.success
@@ -110,12 +110,12 @@ class SessionController:
             logger.warning("Not connected to Arduino")
             return False
 
-        count = count or settings.photo_sequence_count
-        delay = delay or settings.photo_sequence_delay
-        response = self._arduino_client.start_photo_sequence(count, delay)
+        final_count = count or settings.photo_sequence_count
+        final_delay = delay or settings.photo_sequence_delay
+        response = self._arduino_client.start_photo_sequence(final_count, final_delay)
         success = response and response.success
         if success:
-            logger.info(f"Started photo sequence: {count} photos, {delay}s delay")
+            logger.info(f"Started photo sequence: {final_count} photos, {final_delay}s delay")
         else:
             logger.info("Failed to start photo sequence")
         return success

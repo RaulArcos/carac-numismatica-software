@@ -7,7 +7,11 @@ class PortRefreshThread(QThread):
     ports_updated = Signal(list)
     
     def run(self) -> None:
-        self.ports_updated.emit(get_available_ports())
+        try:
+            ports = get_available_ports()
+            self.ports_updated.emit(ports)
+        except Exception:
+            self.ports_updated.emit([])
 
 
 class PortService:

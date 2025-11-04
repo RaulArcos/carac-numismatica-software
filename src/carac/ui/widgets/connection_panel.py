@@ -6,14 +6,14 @@ class ConnectionPanel(QFrame):
     port_refresh_requested = Signal()
     connection_toggle_requested = Signal()
     
-    PORT_COMBO_MIN_WIDTH = 100
-    PORT_COMBO_MAX_WIDTH = 120
-    REFRESH_BUTTON_MAX_WIDTH = 35
-    CONNECT_BUTTON_MIN_HEIGHT = 30
-    CONNECT_BUTTON_MIN_WIDTH = 80
-    LAYOUT_MARGIN = 10
-    LAYOUT_MARGIN_VERTICAL = 8
-    LAYOUT_SPACING = 6
+    PORT_COMBO_MIN_WIDTH = 85
+    PORT_COMBO_MAX_WIDTH = 100
+    REFRESH_BUTTON_MAX_WIDTH = 28
+    CONNECT_BUTTON_MIN_HEIGHT = 22
+    CONNECT_BUTTON_MIN_WIDTH = 65
+    LAYOUT_MARGIN = 8
+    LAYOUT_MARGIN_VERTICAL = 6
+    LAYOUT_SPACING = 5
     
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)

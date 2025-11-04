@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from loguru import logger
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -26,23 +26,32 @@ from .widgets import (
     PhotoControlPanel,
     PresetControlPanel,
     StatusCard,
+    WeightDisplayWidget,
 )
 
 
 class MainWindow(QMainWindow):
     WINDOW_TITLE = "CARAC - Control Numismático UCA"
     WINDOW_ORGANIZATION = "Universidad de Cádiz"
-    WINDOW_WIDTH = 1200
-    WINDOW_HEIGHT = 750
+    WINDOW_WIDTH = 1000
+    WINDOW_HEIGHT = 650
     WINDOW_X = 100
     WINDOW_Y = 100
-    MIN_WIDTH = 1100
-    MIN_HEIGHT = 700
-    PORT_REFRESH_INTERVAL_MS = 5000
-    LAYOUT_MARGIN = 10
-    LAYOUT_SPACING = 10
-    HEADER_SPACING = 15
-    STATUS_CARD_SPACING = 8
+    MIN_WIDTH = 900
+    MIN_HEIGHT = 580
+    LAYOUT_MARGIN = 8
+    LAYOUT_SPACING = 8
+    HEADER_SPACING = 12
+    STATUS_CARD_SPACING = 6
+    TITLE_SECTION_SPACING = 5
+    CONTENT_SPACING = 8
+    PANEL_SPACING = 5
+    LOG_PANEL_SPACING = 6
+    SEQUENCE_STEP_COUNT = 4
+    SEQUENCE_WAIT_DELAY_MS = 5000
+    SEQUENCE_RETURN_DELAY_MS = 1000
+    LOG_THROTTLE_DELAY_MS = 50
+    NORMALIZATION_FACTOR = 255.0
 
     def __init__(self) -> None:
         super().__init__()
@@ -59,7 +68,6 @@ class MainWindow(QMainWindow):
             "section3": 0,
             "section4": 0,
         }
-
         self._initialize_window()
         logger.info("Main window initialized")
 
@@ -111,7 +119,7 @@ class MainWindow(QMainWindow):
     
     def _create_title_section(self) -> QVBoxLayout:
         layout = QVBoxLayout()
-        layout.setSpacing(5)
+        layout.setSpacing(self.TITLE_SECTION_SPACING)
         
         title_label = QLabel("CARAC - Control Numismático")
         title_label.setObjectName("titleLabel")
@@ -144,7 +152,7 @@ class MainWindow(QMainWindow):
     
     def _create_content_layout(self) -> QHBoxLayout:
         layout = QHBoxLayout()
-        layout.setSpacing(10)
+        layout.setSpacing(self.CONTENT_SPACING)
         
         layout.addWidget(self._create_left_panel(), 1.5)
         layout.addWidget(self._create_middle_panel(), 0.5)
@@ -156,7 +164,7 @@ class MainWindow(QMainWindow):
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
+        layout.setSpacing(self.PANEL_SPACING)
         
         self._lighting_panel = LightingControlPanel(settings.lighting_channels)
         layout.addWidget(self._lighting_panel)
@@ -170,10 +178,13 @@ class MainWindow(QMainWindow):
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
+        layout.setSpacing(self.PANEL_SPACING)
         
         self._photo_panel = PhotoControlPanel()
         layout.addWidget(self._photo_panel)
+        
+        self._weight_display = WeightDisplayWidget()
+        layout.addWidget(self._weight_display)
         layout.addStretch()
         
         return panel
@@ -182,7 +193,7 @@ class MainWindow(QMainWindow):
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
+        layout.setSpacing(self.LOG_PANEL_SPACING)
         
         self._log_panel = LogPanel()
         layout.addWidget(self._log_panel)
@@ -216,7 +227,9 @@ class MainWindow(QMainWindow):
     
     def _start_port_refresh(self) -> None:
         self._port_refresh_timer.timeout.connect(self._refresh_ports)
-        self._port_refresh_timer.start(self.PORT_REFRESH_INTERVAL_MS)
+        refresh_interval = settings.port_refresh_interval_ms
+        self._port_refresh_timer.start(refresh_interval)
+        logger.info(f"Port refresh started with interval: {refresh_interval}ms")
         self._refresh_ports()
     
     def _apply_styles(self) -> None:
@@ -230,6 +243,8 @@ class MainWindow(QMainWindow):
     def _refresh_ports(self) -> None:
         if not self._port_refresh_thread.isRunning():
             self._port_refresh_thread.start()
+        else:
+            logger.debug("Port refresh skipped - previous refresh still in progress")
     
     def _update_port_list(self, ports: list[str]) -> None:
         annotated_ports = PortService.annotate_arduino_ports(ports)
@@ -253,71 +268,75 @@ class MainWindow(QMainWindow):
     
     def _on_connection_status_changed(self, status: ConnectionStatus) -> None:
         if status == ConnectionStatus.CONNECTED:
-            self._connection_panel.set_connect_button_text("Desconectar")
-            style_manager.apply_button_style(self._connection_panel.connect_button, "disconnect")
-            self._connection_card.set_value("Conectado", "connected")
-            self._photo_panel.set_system_info("Conectado", "connected")
-            self._heartbeat_card.set_value("Esperando...", "connecting")
+            QTimer.singleShot(0, lambda: self._connection_panel.set_connect_button_text("Desconectar"))
+            QTimer.singleShot(0, lambda: self._connection_card.set_value("Conectado", "connected"))
+            QTimer.singleShot(0, lambda: self._photo_panel.set_system_info("Conectado", "connected"))
+            QTimer.singleShot(0, lambda: self._heartbeat_card.set_value("Esperando...", "connecting"))
+            QTimer.singleShot(0, lambda: style_manager.apply_button_style(
+                self._connection_panel.connect_button, "disconnect"
+            ))
         elif status == ConnectionStatus.CONNECTING:
-            self._connection_card.set_value("Conectando...", "connecting")
-            self._heartbeat_card.set_value("—", "inactive")
+            QTimer.singleShot(0, lambda: self._connection_card.set_value("Conectando...", "connecting"))
+            QTimer.singleShot(0, lambda: self._heartbeat_card.set_value("—", "inactive"))
         elif status == ConnectionStatus.ERROR:
-            self._connection_card.set_value("Error", "disconnected")
-            self._heartbeat_card.set_value("—", "inactive")
+            QTimer.singleShot(0, lambda: self._connection_card.set_value("Error", "disconnected"))
+            QTimer.singleShot(0, lambda: self._heartbeat_card.set_value("—", "inactive"))
         else:
-            self._connection_panel.set_connect_button_text("Conectar")
-            self._connection_panel.connect_button.setObjectName("")
-            style_manager.refresh_widget_style(self._connection_panel.connect_button)
-            self._connection_card.set_value("Desconectado", "disconnected")
-            self._photo_panel.set_system_info("Desconectado", "disconnected")
-            self._heartbeat_card.set_value("—", "inactive")
+            QTimer.singleShot(0, lambda: self._connection_panel.set_connect_button_text("Conectar"))
+            QTimer.singleShot(0, lambda: self._connection_card.set_value("Desconectado", "disconnected"))
+            QTimer.singleShot(0, lambda: self._photo_panel.set_system_info("Desconectado", "disconnected"))
+            QTimer.singleShot(0, lambda: self._heartbeat_card.set_value("—", "inactive"))
+            QTimer.singleShot(0, lambda: (
+                self._connection_panel.connect_button.setObjectName(""),
+                style_manager.refresh_widget_style(self._connection_panel.connect_button)
+            ))
     
     def _on_section_changed(self, section_index: int, intensity: int) -> None:
         self._preset_panel.clear_selection()
         
-        # When a section slider changes, update all rings with that intensity
-        # ESP32 expects ring_1 through ring_4 channels
-        if self._session_controller.is_connected:
-            success_count = 0
-            for ring_idx in range(1, 5):
-                ring_channel = f"ring_{ring_idx}"
+        if not self._session_controller.is_connected:
+            return
+        
+        success_count = 0
+        for ring_idx in range(1, 5):
+            ring_channel = f"ring_{ring_idx}"
+            try:
                 success = self._session_controller.set_lighting(ring_channel, intensity)
                 if success:
                     success_count += 1
-            
-            if success_count == 4:
-                normalized = intensity / 255.0
-                self._log_panel.add_message(f"Sección {section_index + 1} configurada a {normalized:.2f} (todos los anillos)")
-            else:
-                self._log_panel.add_message(
-                    f"Error al configurar Sección {section_index + 1} ({success_count}/4 anillos)",
-                    is_error=True
-                )
+            except Exception as e:
+                logger.error(f"Error setting lighting for {ring_channel}: {e}")
+        
+        if success_count == 4:
+            normalized = intensity / self.NORMALIZATION_FACTOR
+            QTimer.singleShot(self.LOG_THROTTLE_DELAY_MS, lambda si=section_index, n=normalized: self._log_panel.add_message(
+                f"Sección {si + 1} configurada a {n:.2f} (todos los anillos)"
+            ))
+        elif success_count < 4:
+            QTimer.singleShot(self.LOG_THROTTLE_DELAY_MS, lambda si=section_index, sc=success_count: self._log_panel.add_message(
+                f"Error al configurar Sección {si + 1} ({sc}/4 anillos)",
+                is_error=True
+            ))
     
     def _on_preset_selected(self, preset_name: str, preset_values: dict[str, int]) -> None:
         self._lighting_panel.set_all_values(preset_values)
         
-        # Convert preset values (ring{ring}_section{section}) to ESP32 format (ring_{ring})
-        # Aggregate section values per ring (average intensity across all sections)
         ring_intensities: dict[str, int] = {}
         
         for ring_idx in range(1, 5):
             ring_key = f"ring_{ring_idx}"
             section_values = []
             
-            # Collect all section values for this ring
             for section_idx in range(1, 5):
                 preset_key = f"ring{ring_idx}_section{section_idx}"
                 if preset_key in preset_values:
                     section_values.append(preset_values[preset_key])
             
-            # Calculate average intensity for this ring
             if section_values:
                 avg_intensity = sum(section_values) // len(section_values)
                 ring_intensities[ring_key] = avg_intensity
         
         if self._session_controller.is_connected:
-            # Send individual lighting_set commands for each ring
             success_count = 0
             for ring_channel, intensity in ring_intensities.items():
                 success = self._session_controller.set_lighting(ring_channel, intensity)
@@ -376,67 +395,41 @@ class MainWindow(QMainWindow):
         self._sequence_running = True
         self._sequence_step = 0
         
-        # Connect timer to sequence step handler
         self._sequence_timer.timeout.connect(self._execute_sequence_step)
         self._sequence_timer.setSingleShot(True)
         
-        # Start with first flip
         self._execute_sequence_step()
     
     def _execute_sequence_step(self) -> None:
-        """Execute next step in the sequence: flip → wait 5s → flip → return"""
         if not self._sequence_running:
             return
         
-        # Check connection before each step
         if not self._session_controller.is_connected:
             self._log_panel.add_message("Conexión perdida durante la secuencia", is_error=True)
             self._sequence_running = False
             self._photo_panel.set_sequence_active(False)
             self._sequence_step = 0
-            try:
-                self._sequence_timer.timeout.disconnect()
-            except RuntimeError:
-                pass  # Already disconnected
+            self._disconnect_sequence_timer()
             return
         
         if self._sequence_step == 0:
-            # First flip
             self._log_panel.add_message("Paso 1/4: Volteando moneda (primera vez)...")
             success = self._session_controller.motor_flip()
             if success:
                 self._sequence_step = 1
-                # Wait 5 seconds before next flip
-                self._sequence_timer.start(5000)  # 5000 ms = 5 seconds
+                self._sequence_timer.start(self.SEQUENCE_WAIT_DELAY_MS)
             else:
-                self._log_panel.add_message("Error en el primer volteo", is_error=True)
-                self._sequence_running = False
-                self._photo_panel.set_sequence_active(False)
-                self._arduino_card.set_value("Error", "disconnected")
-                try:
-                    self._sequence_timer.timeout.disconnect()
-                except RuntimeError:
-                    pass
+                self._handle_sequence_error("Error en el primer volteo")
         elif self._sequence_step == 1:
-            # Wait completed, second flip
             self._log_panel.add_message("Paso 2/4: Espera completada (5s)")
             self._log_panel.add_message("Paso 3/4: Volteando moneda (segunda vez)...")
             success = self._session_controller.motor_flip()
             if success:
                 self._sequence_step = 2
-                # Small delay before returning
-                self._sequence_timer.start(1000)  # 1 second delay
+                self._sequence_timer.start(self.SEQUENCE_RETURN_DELAY_MS)
             else:
-                self._log_panel.add_message("Error en el segundo volteo", is_error=True)
-                self._sequence_running = False
-                self._photo_panel.set_sequence_active(False)
-                self._arduino_card.set_value("Error", "disconnected")
-                try:
-                    self._sequence_timer.timeout.disconnect()
-                except RuntimeError:
-                    pass
+                self._handle_sequence_error("Error en el segundo volteo")
         elif self._sequence_step == 2:
-            # Return coin
             self._log_panel.add_message("Paso 4/4: Retornando moneda...")
             success = self._session_controller.motor_position("backward")
             if success:
@@ -446,14 +439,23 @@ class MainWindow(QMainWindow):
                 self._log_panel.add_message("Error al retornar moneda", is_error=True)
                 self._arduino_card.set_value("Error", "disconnected")
             
-            # Sequence complete
             self._sequence_running = False
             self._photo_panel.set_sequence_active(False)
             self._sequence_step = 0
-            try:
-                self._sequence_timer.timeout.disconnect()
-            except RuntimeError:
-                pass  # Already disconnected
+            self._disconnect_sequence_timer()
+    
+    def _handle_sequence_error(self, error_message: str) -> None:
+        self._log_panel.add_message(error_message, is_error=True)
+        self._sequence_running = False
+        self._photo_panel.set_sequence_active(False)
+        self._arduino_card.set_value("Error", "disconnected")
+        self._disconnect_sequence_timer()
+    
+    def _disconnect_sequence_timer(self) -> None:
+        try:
+            self._sequence_timer.timeout.disconnect()
+        except RuntimeError:
+            pass
     
     def _on_stop_sequence(self) -> None:
         if not self._sequence_running:
@@ -463,10 +465,7 @@ class MainWindow(QMainWindow):
         self._sequence_running = False
         self._sequence_step = 0
         self._sequence_timer.stop()
-        try:
-            self._sequence_timer.timeout.disconnect()
-        except RuntimeError:
-            pass  # Already disconnected
+        self._disconnect_sequence_timer()
         self._photo_panel.set_sequence_active(False)
         self._arduino_card.set_value("Operativo", "operational")
     
@@ -501,14 +500,18 @@ class MainWindow(QMainWindow):
     def _on_arduino_response(self, response: Response) -> None:
         if response.data and 'led_state' in response.data:
             led_state = response.data['led_state']
-            self._photo_panel.set_led_status(led_state)
+            QTimer.singleShot(0, lambda ls=led_state: self._photo_panel.set_led_status(ls))
         
         if response.success:
-            self._log_panel.add_message(f"ESP32: {response.message}")
-            self._arduino_card.set_value("Operativo", "operational")
+            message = response.message
+            QTimer.singleShot(0, lambda m=message: self._log_panel.add_message(f"ESP32: {m}"))
+            QTimer.singleShot(0, lambda: self._arduino_card.set_value("Operativo", "operational"))
         else:
-            self._log_panel.add_message(f"Error ESP32: {response.message}", is_error=True)
-            self._arduino_card.set_value("Error", "disconnected")
+            message = response.message
+            QTimer.singleShot(0, lambda m=message: self._log_panel.add_message(
+                f"Error ESP32: {m}", is_error=True
+            ))
+            QTimer.singleShot(0, lambda: self._arduino_card.set_value("Error", "disconnected"))
     
     def _on_esp32_event(self, event: Message) -> None:
         logger.info(f"ESP32 Event: {event.type}")
@@ -516,48 +519,60 @@ class MainWindow(QMainWindow):
         if event.type == MessageType.EVENT_STATUS:
             message = event.payload.get("message", "Ready")
             firmware_version = event.payload.get("firmware_version", "Unknown")
-            self._log_panel.add_message(f"{message} (Firmware: v{firmware_version})")
-            self._arduino_card.set_value(f"{message}", "Ready")
+            QTimer.singleShot(0, lambda m=message, fv=firmware_version: self._log_panel.add_message(
+                f"{m} (Firmware: v{fv})"
+            ))
+            QTimer.singleShot(0, lambda m=message: self._arduino_card.set_value(f"{m}", "Ready"))
         
         elif event.type == MessageType.EVENT_SEQUENCE_STARTED:
             total = event.payload.get("total_photos", 0)
-            self._log_panel.add_message(f"Secuencia iniciada: {total} fotos")
-            self._photo_panel.set_sequence_active(True)
+            QTimer.singleShot(0, lambda t=total: self._log_panel.add_message(f"Secuencia iniciada: {t} fotos"))
+            QTimer.singleShot(0, lambda: self._photo_panel.set_sequence_active(True))
         
         elif event.type == MessageType.EVENT_SEQUENCE_PROGRESS:
             current = event.payload.get("current_photo", 0)
             total = event.payload.get("total_photos", 0)
             action = event.payload.get("action", "")
-            self._log_panel.add_message(f"Progreso: {current}/{total} - {action}")
+            QTimer.singleShot(0, lambda c=current, t=total, a=action: self._log_panel.add_message(f"Progreso: {c}/{t} - {a}"))
         
         elif event.type == MessageType.EVENT_SEQUENCE_COMPLETED:
             photos = event.payload.get("photos_taken", 0)
             duration = event.payload.get("duration", 0)
-            self._log_panel.add_message(f"Secuencia completada: {photos} fotos en {duration:.1f}s")
-            self._photo_panel.set_sequence_active(False)
+            QTimer.singleShot(0, lambda p=photos, d=duration: self._log_panel.add_message(
+                f"Secuencia completada: {p} fotos en {d:.1f}s"
+            ))
+            QTimer.singleShot(0, lambda: self._photo_panel.set_sequence_active(False))
         
         elif event.type == MessageType.EVENT_SEQUENCE_STOPPED:
             reason = event.payload.get("reason", "unknown")
             photos = event.payload.get("photos_taken", 0)
-            self._log_panel.add_message(f"Secuencia detenida ({reason}): {photos} fotos", is_error=True)
-            self._photo_panel.set_sequence_active(False)
+            QTimer.singleShot(0, lambda r=reason, p=photos: self._log_panel.add_message(
+                f"Secuencia detenida ({r}): {p} fotos", is_error=True
+            ))
+            QTimer.singleShot(0, lambda: self._photo_panel.set_sequence_active(False))
         
         elif event.type == MessageType.EVENT_ERROR:
             msg = event.payload.get("message", "Error desconocido")
             severity = event.payload.get("severity", "medium")
-            self._log_panel.add_message(f"Error [{severity}]: {msg}", is_error=True)
+            QTimer.singleShot(0, lambda m=msg, s=severity: self._log_panel.add_message(
+                f"Error [{s}]: {m}", is_error=True
+            ))
         
         elif event.type == MessageType.EVENT_CAMERA_TRIGGERED:
             duration = event.payload.get("duration", 0)
-            self._log_panel.add_message(f"Cámara activada ({duration}ms)")
+            QTimer.singleShot(0, lambda d=duration: self._log_panel.add_message(f"Cámara activada ({d}ms)"))
         
         elif event.type == MessageType.EVENT_MOTOR_COMPLETE:
             position = event.payload.get("position", 0)
-            self._log_panel.add_message(f"Motor en posición: {position}")
+            QTimer.singleShot(0, lambda p=position: self._log_panel.add_message(f"Motor en posición: {p}"))
+        
+        elif event.type == MessageType.EVENT_WEIGHT_READING:
+            weight = event.payload.get("weight", 0.0)
+            QTimer.singleShot(0, lambda w=weight: self._weight_display.set_weight(w))
     
     def _on_heartbeat_received(self, health: ConnectionHealth) -> None:
         if health.is_alive:
-            self._heartbeat_card.set_value("Active", "connected")
+            QTimer.singleShot(0, lambda: self._heartbeat_card.set_value("Active", "connected"))
             if health.heartbeat_count % 10 == 0:
                 uptime_seconds = health.esp32_uptime_ms / 1000
                 if uptime_seconds < 60:
@@ -568,8 +583,10 @@ class MainWindow(QMainWindow):
                     uptime_str = f"{uptime_seconds / 3600:.1f}h"
                 logger.debug(f"Heartbeat #{health.heartbeat_count}: uptime={uptime_str}")
         else:
-            self._heartbeat_card.set_value("dead", "disconnected")
-            self._log_panel.add_message("⚠ Conexión perdida - sin heartbeat", is_error=True)
+            QTimer.singleShot(0, lambda: self._heartbeat_card.set_value("dead", "disconnected"))
+            QTimer.singleShot(0, lambda: self._log_panel.add_message(
+                "⚠ Conexión perdida - sin heartbeat", is_error=True
+            ))
             logger.warning("Heartbeat timeout - connection lost")
     
     def _on_acknowledgment_received(self, ack: AcknowledgmentInfo) -> None:
@@ -584,10 +601,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event) -> None:
         if self._sequence_running:
             self._sequence_timer.stop()
-            try:
-                self._sequence_timer.timeout.disconnect()
-            except RuntimeError:
-                pass
+            self._disconnect_sequence_timer()
         if self._session_controller.is_connected:
             self._session_controller.disconnect()
         self._port_refresh_timer.stop()

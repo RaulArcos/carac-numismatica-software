@@ -5,6 +5,7 @@ from .preset_controls import PresetControlPanel
 from .status_card import StatusCard
 from .log_panel import LogPanel
 from .connection_panel import ConnectionPanel
+from .weight_display import WeightDisplayWidget
 
 __all__ = [
     "CylinderVisualization",
@@ -14,4 +15,5 @@ __all__ = [
     "StatusCard",
     "LogPanel",
     "ConnectionPanel",
+    "WeightDisplayWidget",
 ]

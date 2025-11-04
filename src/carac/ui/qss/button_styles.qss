@@ -1,16 +1,13 @@
-/* Button styling for CARAC UCA interface */
-
-/* Disconnect Button */
 QPushButton#disconnectButton {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
                                 stop: 0 #DD7500, stop: 1 #b85d00);
     color: white;
     border: none;
-    border-radius: 8px;
-    padding: 12px 20px;
+    border-radius: 6px;
+    padding: 8px 16px;
     font-weight: 600;
-    font-size: 9pt;
-    min-height: 20px;
+    font-size: 8pt;
+    min-height: 18px;
 }
 
 QPushButton#disconnectButton:hover {
@@ -18,17 +15,16 @@ QPushButton#disconnectButton:hover {
                                 stop: 0 #ff8c1a, stop: 1 #DD7500);
 }
 
-/* Emergency Stop Button */
 QPushButton#emergencyButton {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
                                 stop: 0 #DD7500, stop: 1 #b85d00);
     color: white;
     border: none;
-    border-radius: 8px;
-    padding: 15px 25px;
+    border-radius: 6px;
+    padding: 10px 20px;
     font-weight: 700;
-    font-size: 11pt;
-    min-height: 25px;
+    font-size: 9pt;
+    min-height: 22px;
 }
 
 QPushButton#emergencyButton:hover {
@@ -36,16 +32,16 @@ QPushButton#emergencyButton:hover {
                                 stop: 0 #ff8c1a, stop: 1 #DD7500);
 }
 
-/* Start Photo Button */
 QPushButton#startButton {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
                                 stop: 0 #00607C, stop: 1 #004a63);
     color: white;
     font-weight: 700;
-    padding: 15px 25px;
-    min-height: 25px;
+    padding: 10px 20px;
+    min-height: 22px;
     border: none;
-    border-radius: 8px;
+    border-radius: 6px;
+    font-size: 9pt;
 }
 
 QPushButton#startButton:hover {
@@ -53,14 +49,16 @@ QPushButton#startButton:hover {
                                 stop: 0 #0072a3, stop: 1 #005580);
 }
 
-/* Warning/Test Button */
 QPushButton#warningButton {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
                                 stop: 0 #DD7500, stop: 1 #b85d00);
     color: white;
     font-weight: 700;
     border: none;
-    border-radius: 8px;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 8pt;
+    min-height: 18px;
 }
 
 QPushButton#warningButton:hover {
@@ -68,17 +66,16 @@ QPushButton#warningButton:hover {
                                 stop: 0 #ff8c1a, stop: 1 #DD7500);
 }
 
-/* Secondary Button */
 QPushButton#secondaryButton {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
                                 stop: 0 #8C8984, stop: 1 #6c6c6c);
     color: white;
     border: none;
-    border-radius: 8px;
-    padding: 12px 20px;
+    border-radius: 6px;
+    padding: 8px 16px;
     font-weight: 600;
-    font-size: 9pt;
-    min-height: 20px;
+    font-size: 8pt;
+    min-height: 18px;
 }
 
 QPushButton#secondaryButton:hover {
@@ -91,17 +88,16 @@ QPushButton#secondaryButton:pressed {
                                 stop: 0 #6c6c6c, stop: 1 #5c5c5c);
 }
 
-/* Preset Selected Button */
 QPushButton#presetSelectedButton {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
                                 stop: 0 #00607C, stop: 1 #004a63);
     color: white;
     border: none;
-    border-radius: 8px;
-    padding: 12px 20px;
+    border-radius: 6px;
+    padding: 8px 16px;
     font-weight: 600;
-    font-size: 9pt;
-    min-height: 20px;
+    font-size: 8pt;
+    min-height: 18px;
 }
 
 QPushButton#presetSelectedButton:hover {

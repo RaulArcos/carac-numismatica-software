@@ -4,10 +4,10 @@ from ..style_manager import style_manager
 
 
 class StatusCard(QFrame):
-    MIN_WIDTH = 120
-    MIN_HEIGHT = 60
-    MAX_WIDTH = 150
-    MAX_HEIGHT = 60
+    MIN_WIDTH = 90
+    MIN_HEIGHT = 45
+    MAX_WIDTH = 115
+    MAX_HEIGHT = 45
     
     def __init__(
         self,
@@ -27,8 +27,8 @@ class StatusCard(QFrame):
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 6, 10, 6)
-        layout.setSpacing(2)
+        layout.setContentsMargins(6, 4, 6, 4)
+        layout.setSpacing(1)
         
         self._title_label = QLabel(title)
         style_manager.set_card_title_style(self._title_label)

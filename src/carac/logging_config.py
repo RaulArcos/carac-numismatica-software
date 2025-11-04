@@ -16,7 +16,7 @@ def setup_logging() -> None:
                 "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
                 "<level>{message}</level>"
             ),
-            level="INFO",
+            level="WARNING",
             colorize=True,
         )
 
@@ -28,10 +28,11 @@ def setup_logging() -> None:
             "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | "
             "{name}:{function}:{line} - {message}"
         ),
-        level="DEBUG",
+        level="INFO",
         rotation="1 day",
         retention="30 days",
         compression="zip",
+        enqueue=True,
     )
 
     logger.info("Logging configured successfully")

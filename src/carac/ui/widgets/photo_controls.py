@@ -23,10 +23,10 @@ class PhotoControlPanel(QGroupBox):
     emergency_stop_requested = Signal()
     led_toggle_requested = Signal()
     
-    BUTTON_HEIGHT_SMALL = 26
-    BUTTON_HEIGHT_MEDIUM = 28
-    BUTTON_HEIGHT_LARGE = 32
-    LED_STATUS_SIZE = 20
+    BUTTON_HEIGHT_SMALL = 20
+    BUTTON_HEIGHT_MEDIUM = 22
+    BUTTON_HEIGHT_LARGE = 24
+    LED_STATUS_SIZE = 16
     
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__("Control de Fotografía", parent)
@@ -34,8 +34,8 @@ class PhotoControlPanel(QGroupBox):
     
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setSpacing(6)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(5)
+        layout.setContentsMargins(6, 6, 6, 6)
         
         self._add_individual_controls(layout)
         self._add_separator(layout)
@@ -48,7 +48,7 @@ class PhotoControlPanel(QGroupBox):
         layout.addWidget(steps_label)
         
         grid = QGridLayout()
-        grid.setSpacing(4)
+        grid.setSpacing(3)
         
         self._position_forward_btn = QPushButton("Mover a Luz")
         self._position_forward_btn.setMinimumHeight(self.BUTTON_HEIGHT_MEDIUM)
@@ -71,7 +71,6 @@ class PhotoControlPanel(QGroupBox):
         self._flip_coin_btn.clicked.connect(self.flip_coin_requested.emit)
         grid.addWidget(self._flip_coin_btn, 1, 0, 1, 2)
         
-        # Camera button hidden - camera not connected in first implementation
         self._take_photo_btn = QPushButton("Tomar Foto")
         self._take_photo_btn.setMinimumHeight(self.BUTTON_HEIGHT_MEDIUM)
         self._take_photo_btn.setMaximumHeight(self.BUTTON_HEIGHT_MEDIUM)
@@ -99,7 +98,7 @@ class PhotoControlPanel(QGroupBox):
         layout.addWidget(info_label)
         
         buttons_layout = QHBoxLayout()
-        buttons_layout.setSpacing(4)
+        buttons_layout.setSpacing(3)
         
         self._start_button = QPushButton("Iniciar Secuencia")
         style_manager.apply_button_style(self._start_button, "start")

@@ -20,13 +20,13 @@ class PresetControlPanel(QGroupBox):
     preset_selected = Signal(str, dict)
     
     CUSTOM_PRESET_COUNT = 2
-    BUTTON_MIN_HEIGHT = 26
-    BUTTON_MAX_HEIGHT = 26
-    SAVE_BUTTON_MAX_WIDTH = 40
-    SAVE_ICON_SIZE = 18
-    LAYOUT_SPACING = 5
-    LAYOUT_MARGIN = 8
-    GRID_SPACING = 4
+    BUTTON_MIN_HEIGHT = 20
+    BUTTON_MAX_HEIGHT = 20
+    SAVE_BUTTON_MAX_WIDTH = 30
+    SAVE_ICON_SIZE = 14
+    LAYOUT_SPACING = 4
+    LAYOUT_MARGIN = 6
+    GRID_SPACING = 3
     
     def __init__(
         self,

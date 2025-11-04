@@ -21,8 +21,8 @@ class LogPanel(QGroupBox):
     COLOR_TIMESTAMP = "gray"
     COLOR_INFO = "#2c3e50"
     COLOR_ERROR = "#DD7500"
-    MAX_LOG_HEIGHT = 600
-    BUTTON_HEIGHT = 26
+    MAX_LOG_HEIGHT = 500
+    BUTTON_HEIGHT = 20
     
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__("Registro", parent)
@@ -30,8 +30,8 @@ class LogPanel(QGroupBox):
     
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(4)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(3)
         
         self._log_text = QTextEdit()
         self._log_text.setObjectName("logText")
