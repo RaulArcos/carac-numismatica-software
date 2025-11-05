@@ -138,6 +138,25 @@ class ArduinoClient:
             logger.error(f"Error sending command: {e}")
             return None
     
+    def send_command_async(self, command: Message) -> bool:
+        """Send command without waiting for response. Returns True if sent successfully."""
+        if not self._serial or not self._serial.is_open:
+            logger.error("Not connected to ESP32")
+            return False
+
+        try:
+            with self._lock:
+                self._last_sent_command_type = command.type
+                command_data = command.to_serial()
+                logger.info(f"→ ESP32 (async): {command_data.strip()}")
+                self._connection_monitor.register_command_sent(command.type)
+                self._serial.write(command_data.encode('utf-8'))
+                self._serial.flush()
+            return True
+        except Exception as e:
+            logger.error(f"Error sending command async: {e}")
+            return False
+    
     def ping(self) -> bool:
         response = self.send_command(SystemPingCommand.create())
         return response is not None and response.success
@@ -163,8 +182,16 @@ class ArduinoClient:
     def set_lighting(self, channel: str, intensity: int) -> Response | None:
         return self.send_command(LightingSetCommand.create(channel, intensity))
     
+    def set_lighting_async(self, channel: str, intensity: int) -> bool:
+        """Send lighting command without waiting for response."""
+        return self.send_command_async(LightingSetCommand.create(channel, intensity))
+    
     def set_sections(self, sections: dict[str, int]) -> Response | None:
         return self.send_command(LightingSetCommand.create_sections(sections))
+    
+    def set_sections_async(self, sections: dict[str, int]) -> bool:
+        """Send sections command without waiting for response."""
+        return self.send_command_async(LightingSetCommand.create_sections(sections))
     
     def start_photo_sequence(
         self,
@@ -276,6 +303,24 @@ class ArduinoClient:
                 Response(
                     success=True,
                     message=f"Command '{message.type}' confirmed",
+                    data=message.payload
+                )
+            )
+        elif message.type in (
+            MessageType.LIGHTING_SET,
+            MessageType.MOTOR_POSITION,
+            MessageType.MOTOR_FLIP,
+            MessageType.CAMERA_TRIGGER,
+            MessageType.TEST_LED_TOGGLE,
+        ):
+            # Handle command echo responses (ESP32 echoes command type as confirmation)
+            # Check if there's an error in the payload
+            has_error = "error" in message.payload or "error_code" in message.payload
+            logger.debug(f"Received command echo response: {message.type} (success={not has_error})")
+            self._route_response(
+                Response(
+                    success=not has_error,
+                    message=f"Command '{message.type}' {'confirmed' if not has_error else 'failed'}",
                     data=message.payload
                 )
             )

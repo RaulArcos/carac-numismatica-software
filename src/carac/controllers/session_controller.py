@@ -53,6 +53,7 @@ class SessionController:
         logger.info("Disconnected from Arduino")
     
     def set_lighting(self, channel: str, intensity: int) -> bool:
+        """Set lighting synchronously (waits for response). Use set_lighting_async for non-blocking."""
         if not self._arduino_client.is_connected:
             logger.warning("Not connected to Arduino")
             return False
@@ -76,7 +77,34 @@ class SessionController:
             logger.info(f"Failed to set {channel} lighting to {intensity}")
         return success
     
+    def set_lighting_async(self, channel: str, intensity: int) -> bool:
+        """Set lighting asynchronously (non-blocking, optimistic update)."""
+        if not self._arduino_client.is_connected:
+            logger.warning("Not connected to Arduino")
+            return False
+        
+        if channel not in self._VALID_CHANNELS:
+            logger.error(f"Invalid lighting channel: {channel}. Expected one of {self._VALID_CHANNELS}")
+            return False
+
+        if channel not in self._lighting_states:
+            self._lighting_states[channel] = LightingState(channel=channel)
+
+        intensity = max(0, min(intensity, settings.max_lighting_intensity))
+        # Update state optimistically (before ESP32 confirms)
+        self._lighting_states[channel].intensity = intensity
+        self._lighting_states[channel].enabled = intensity > 0
+
+        # Send command without waiting for response
+        sent = self._arduino_client.set_lighting_async(channel, intensity)
+        if sent:
+            logger.debug(f"Sent {channel} lighting command to {intensity} (async)")
+        else:
+            logger.warning(f"Failed to send {channel} lighting command")
+        return sent
+    
     def set_sections(self, sections: dict[str, int]) -> bool:
+        """Set sections synchronously (waits for response). Use set_sections_async for non-blocking."""
         if not self._arduino_client.is_connected:
             logger.warning("Not connected to Arduino")
             return False
@@ -98,6 +126,31 @@ class SessionController:
         else:
             logger.info("Failed to set sections lighting")
         return success
+    
+    def set_sections_async(self, sections: dict[str, int]) -> bool:
+        """Set sections asynchronously (non-blocking, optimistic update)."""
+        if not self._arduino_client.is_connected:
+            logger.warning("Not connected to Arduino")
+            return False
+        
+        clamped_sections = {}
+        for section, intensity in sections.items():
+            if section not in self._lighting_states:
+                logger.error(f"Unknown lighting channel: {section}")
+                return False
+            clamped_intensity = max(0, min(intensity, settings.max_lighting_intensity))
+            clamped_sections[section] = clamped_intensity
+            # Update state optimistically (before ESP32 confirms)
+            self._lighting_states[section].intensity = clamped_intensity
+            self._lighting_states[section].enabled = clamped_intensity > 0
+        
+        # Send command without waiting for response
+        sent = self._arduino_client.set_sections_async(clamped_sections)
+        if sent:
+            logger.debug(f"Sent sections lighting command (async): {clamped_sections}")
+        else:
+            logger.warning("Failed to send sections lighting command")
+        return sent
     
     def get_lighting_state(self, channel: str) -> LightingState | None:
         return self._lighting_states.get(channel)

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from loguru import logger
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -51,7 +51,15 @@ class MainWindow(QMainWindow):
     SEQUENCE_WAIT_DELAY_MS = 5000
     SEQUENCE_RETURN_DELAY_MS = 1000
     LOG_THROTTLE_DELAY_MS = 50
+    WEIGHT_UPDATE_THROTTLE_MS = 100  # Throttle weight updates to max 10 per second
     NORMALIZATION_FACTOR = 255.0
+    
+    # Signals for thread-safe UI updates from background threads
+    status_changed = Signal(object)  # ConnectionStatus
+    response_received = Signal(object)  # Response
+    event_received = Signal(object)  # Message
+    heartbeat_received = Signal(object)  # ConnectionHealth
+    weight_update = Signal(float)  # weight value
 
     def __init__(self) -> None:
         super().__init__()
@@ -68,6 +76,10 @@ class MainWindow(QMainWindow):
             "section3": 0,
             "section4": 0,
         }
+        # Throttling for weight updates
+        self._weight_throttle_timer = QTimer()
+        self._weight_throttle_timer.setSingleShot(True)
+        self._pending_weight: float | None = None
         self._initialize_window()
         logger.info("Main window initialized")
 
@@ -217,12 +229,21 @@ class MainWindow(QMainWindow):
         self._photo_panel.stop_sequence_requested.connect(self._on_stop_sequence)
         self._photo_panel.emergency_stop_requested.connect(self._on_emergency_stop)
         self._photo_panel.led_toggle_requested.connect(self._on_toggle_led)
+        
+        # Connect signals for thread-safe updates
+        self.status_changed.connect(self._on_connection_status_changed)
+        self.response_received.connect(self._on_arduino_response)
+        self.event_received.connect(self._on_esp32_event)
+        self.heartbeat_received.connect(self._on_heartbeat_received)
+        self.weight_update.connect(self._on_weight_update_throttled)
+        self._weight_throttle_timer.timeout.connect(self._process_pending_weight)
     
     def _setup_session_callbacks(self) -> None:
-        self._session_controller.add_status_callback(self._on_connection_status_changed)
-        self._session_controller.add_response_callback(self._on_arduino_response)
-        self._session_controller.add_event_callback(self._on_esp32_event)
-        self._session_controller.add_heartbeat_callback(self._on_heartbeat_received)
+        # Use signal emissions instead of direct callback calls for thread safety
+        self._session_controller.add_status_callback(lambda s: self.status_changed.emit(s))
+        self._session_controller.add_response_callback(lambda r: self.response_received.emit(r))
+        self._session_controller.add_event_callback(lambda e: self.event_received.emit(e))
+        self._session_controller.add_heartbeat_callback(lambda h: self.heartbeat_received.emit(h))
         self._session_controller.add_ack_callback(self._on_acknowledgment_received)
     
     def _start_port_refresh(self) -> None:
@@ -267,29 +288,28 @@ class MainWindow(QMainWindow):
         self._log_panel.add_message("Conectado exitosamente" if success else "Error de conexión", is_error=not success)
     
     def _on_connection_status_changed(self, status: ConnectionStatus) -> None:
+        # Signal ensures we're on main thread, so direct calls are safe
         if status == ConnectionStatus.CONNECTED:
-            QTimer.singleShot(0, lambda: self._connection_panel.set_connect_button_text("Desconectar"))
-            QTimer.singleShot(0, lambda: self._connection_card.set_value("Conectado", "connected"))
-            QTimer.singleShot(0, lambda: self._photo_panel.set_system_info("Conectado", "connected"))
-            QTimer.singleShot(0, lambda: self._heartbeat_card.set_value("Esperando...", "connecting"))
-            QTimer.singleShot(0, lambda: style_manager.apply_button_style(
+            self._connection_panel.set_connect_button_text("Desconectar")
+            self._connection_card.set_value("Conectado", "connected")
+            self._photo_panel.set_system_info("Conectado", "connected")
+            self._heartbeat_card.set_value("Esperando...", "connecting")
+            style_manager.apply_button_style(
                 self._connection_panel.connect_button, "disconnect"
-            ))
+            )
         elif status == ConnectionStatus.CONNECTING:
-            QTimer.singleShot(0, lambda: self._connection_card.set_value("Conectando...", "connecting"))
-            QTimer.singleShot(0, lambda: self._heartbeat_card.set_value("—", "inactive"))
+            self._connection_card.set_value("Conectando...", "connecting")
+            self._heartbeat_card.set_value("—", "inactive")
         elif status == ConnectionStatus.ERROR:
-            QTimer.singleShot(0, lambda: self._connection_card.set_value("Error", "disconnected"))
-            QTimer.singleShot(0, lambda: self._heartbeat_card.set_value("—", "inactive"))
+            self._connection_card.set_value("Error", "disconnected")
+            self._heartbeat_card.set_value("—", "inactive")
         else:
-            QTimer.singleShot(0, lambda: self._connection_panel.set_connect_button_text("Conectar"))
-            QTimer.singleShot(0, lambda: self._connection_card.set_value("Desconectado", "disconnected"))
-            QTimer.singleShot(0, lambda: self._photo_panel.set_system_info("Desconectado", "disconnected"))
-            QTimer.singleShot(0, lambda: self._heartbeat_card.set_value("—", "inactive"))
-            QTimer.singleShot(0, lambda: (
-                self._connection_panel.connect_button.setObjectName(""),
-                style_manager.refresh_widget_style(self._connection_panel.connect_button)
-            ))
+            self._connection_panel.set_connect_button_text("Conectar")
+            self._connection_card.set_value("Desconectado", "disconnected")
+            self._photo_panel.set_system_info("Desconectado", "disconnected")
+            self._heartbeat_card.set_value("—", "inactive")
+            self._connection_panel.connect_button.setObjectName("")
+            style_manager.refresh_widget_style(self._connection_panel.connect_button)
     
     def _on_section_changed(self, section_index: int, intensity: int) -> None:
         self._preset_panel.clear_selection()
@@ -297,28 +317,32 @@ class MainWindow(QMainWindow):
         if not self._session_controller.is_connected:
             return
         
-        success_count = 0
+        # Send commands asynchronously - UI already updated by the slider
+        # Responses will be handled via _on_arduino_response if there are errors
+        sent_count = 0
         for ring_idx in range(1, 5):
             ring_channel = f"ring_{ring_idx}"
             try:
-                success = self._session_controller.set_lighting(ring_channel, intensity)
-                if success:
-                    success_count += 1
+                sent = self._session_controller.set_lighting_async(ring_channel, intensity)
+                if sent:
+                    sent_count += 1
             except Exception as e:
                 logger.error(f"Error setting lighting for {ring_channel}: {e}")
         
-        if success_count == 4:
+        # Log success if all commands were sent (responses handled asynchronously)
+        if sent_count == 4:
             normalized = intensity / self.NORMALIZATION_FACTOR
             QTimer.singleShot(self.LOG_THROTTLE_DELAY_MS, lambda si=section_index, n=normalized: self._log_panel.add_message(
                 f"Sección {si + 1} configurada a {n:.2f} (todos los anillos)"
             ))
-        elif success_count < 4:
-            QTimer.singleShot(self.LOG_THROTTLE_DELAY_MS, lambda si=section_index, sc=success_count: self._log_panel.add_message(
-                f"Error al configurar Sección {si + 1} ({sc}/4 anillos)",
+        elif sent_count < 4:
+            QTimer.singleShot(self.LOG_THROTTLE_DELAY_MS, lambda si=section_index, sc=sent_count: self._log_panel.add_message(
+                f"Error al enviar comando Sección {si + 1} ({sc}/4 anillos)",
                 is_error=True
             ))
     
     def _on_preset_selected(self, preset_name: str, preset_values: dict[str, int]) -> None:
+        # Update UI immediately (optimistic)
         self._lighting_panel.set_all_values(preset_values)
         
         ring_intensities: dict[str, int] = {}
@@ -337,17 +361,18 @@ class MainWindow(QMainWindow):
                 ring_intensities[ring_key] = avg_intensity
         
         if self._session_controller.is_connected:
-            success_count = 0
+            # Send commands asynchronously - UI already updated
+            sent_count = 0
             for ring_channel, intensity in ring_intensities.items():
-                success = self._session_controller.set_lighting(ring_channel, intensity)
-                if success:
-                    success_count += 1
+                sent = self._session_controller.set_lighting_async(ring_channel, intensity)
+                if sent:
+                    sent_count += 1
             
-            if success_count == len(ring_intensities):
+            if sent_count == len(ring_intensities):
                 self._log_panel.add_message(f"Perfil '{preset_name}' aplicado ({len(ring_intensities)} anillos configurados)")
             else:
                 self._log_panel.add_message(
-                    f"Perfil '{preset_name}' aplicado con errores ({success_count}/{len(ring_intensities)} anillos)",
+                    f"Perfil '{preset_name}' aplicado con errores ({sent_count}/{len(ring_intensities)} anillos)",
                     is_error=True
                 )
         else:
@@ -498,81 +523,93 @@ class MainWindow(QMainWindow):
             self._log_panel.add_message("Error en paro de emergencia", is_error=True)
     
     def _on_arduino_response(self, response: Response) -> None:
+        # Signal ensures we're on main thread, so direct calls are safe
         if response.data and 'led_state' in response.data:
             led_state = response.data['led_state']
-            QTimer.singleShot(0, lambda ls=led_state: self._photo_panel.set_led_status(ls))
+            self._photo_panel.set_led_status(led_state)
         
+        # Only log errors or important responses - UI already updated optimistically
         if response.success:
-            message = response.message
-            QTimer.singleShot(0, lambda m=message: self._log_panel.add_message(f"ESP32: {m}"))
-            QTimer.singleShot(0, lambda: self._arduino_card.set_value("Operativo", "operational"))
+            # Only log non-lighting responses (lighting responses are expected and don't need logging)
+            if not response.message or 'lighting' not in response.message.lower():
+                message = response.message
+                if message:  # Only log if there's a meaningful message
+                    self._log_panel.add_message(f"ESP32: {message}")
+            self._arduino_card.set_value("Operativo", "operational")
         else:
+            # Log errors - these might indicate the optimistic update was wrong
             message = response.message
-            QTimer.singleShot(0, lambda m=message: self._log_panel.add_message(
-                f"Error ESP32: {m}", is_error=True
-            ))
-            QTimer.singleShot(0, lambda: self._arduino_card.set_value("Error", "disconnected"))
+            self._log_panel.add_message(
+                f"Error ESP32: {message}", is_error=True
+            )
+            self._arduino_card.set_value("Error", "disconnected")
+            
+            # TODO: Could revert UI state here if response indicates different value
+            # For now, we just log the error
     
     def _on_esp32_event(self, event: Message) -> None:
         logger.info(f"ESP32 Event: {event.type}")
         
+        # Signal ensures we're on main thread, so direct calls are safe
         if event.type == MessageType.EVENT_STATUS:
             message = event.payload.get("message", "Ready")
             firmware_version = event.payload.get("firmware_version", "Unknown")
-            QTimer.singleShot(0, lambda m=message, fv=firmware_version: self._log_panel.add_message(
-                f"{m} (Firmware: v{fv})"
-            ))
-            QTimer.singleShot(0, lambda m=message: self._arduino_card.set_value(f"{m}", "Ready"))
+            self._log_panel.add_message(
+                f"{message} (Firmware: v{firmware_version})"
+            )
+            self._arduino_card.set_value(f"{message}", "Ready")
         
         elif event.type == MessageType.EVENT_SEQUENCE_STARTED:
             total = event.payload.get("total_photos", 0)
-            QTimer.singleShot(0, lambda t=total: self._log_panel.add_message(f"Secuencia iniciada: {t} fotos"))
-            QTimer.singleShot(0, lambda: self._photo_panel.set_sequence_active(True))
+            self._log_panel.add_message(f"Secuencia iniciada: {total} fotos")
+            self._photo_panel.set_sequence_active(True)
         
         elif event.type == MessageType.EVENT_SEQUENCE_PROGRESS:
             current = event.payload.get("current_photo", 0)
             total = event.payload.get("total_photos", 0)
             action = event.payload.get("action", "")
-            QTimer.singleShot(0, lambda c=current, t=total, a=action: self._log_panel.add_message(f"Progreso: {c}/{t} - {a}"))
+            self._log_panel.add_message(f"Progreso: {current}/{total} - {action}")
         
         elif event.type == MessageType.EVENT_SEQUENCE_COMPLETED:
             photos = event.payload.get("photos_taken", 0)
             duration = event.payload.get("duration", 0)
-            QTimer.singleShot(0, lambda p=photos, d=duration: self._log_panel.add_message(
-                f"Secuencia completada: {p} fotos en {d:.1f}s"
-            ))
-            QTimer.singleShot(0, lambda: self._photo_panel.set_sequence_active(False))
+            self._log_panel.add_message(
+                f"Secuencia completada: {photos} fotos en {duration:.1f}s"
+            )
+            self._photo_panel.set_sequence_active(False)
         
         elif event.type == MessageType.EVENT_SEQUENCE_STOPPED:
             reason = event.payload.get("reason", "unknown")
             photos = event.payload.get("photos_taken", 0)
-            QTimer.singleShot(0, lambda r=reason, p=photos: self._log_panel.add_message(
-                f"Secuencia detenida ({r}): {p} fotos", is_error=True
-            ))
-            QTimer.singleShot(0, lambda: self._photo_panel.set_sequence_active(False))
+            self._log_panel.add_message(
+                f"Secuencia detenida ({reason}): {photos} fotos", is_error=True
+            )
+            self._photo_panel.set_sequence_active(False)
         
         elif event.type == MessageType.EVENT_ERROR:
             msg = event.payload.get("message", "Error desconocido")
             severity = event.payload.get("severity", "medium")
-            QTimer.singleShot(0, lambda m=msg, s=severity: self._log_panel.add_message(
-                f"Error [{s}]: {m}", is_error=True
-            ))
+            self._log_panel.add_message(
+                f"Error [{severity}]: {msg}", is_error=True
+            )
         
         elif event.type == MessageType.EVENT_CAMERA_TRIGGERED:
             duration = event.payload.get("duration", 0)
-            QTimer.singleShot(0, lambda d=duration: self._log_panel.add_message(f"Cámara activada ({d}ms)"))
+            self._log_panel.add_message(f"Cámara activada ({duration}ms)")
         
         elif event.type == MessageType.EVENT_MOTOR_COMPLETE:
             position = event.payload.get("position", 0)
-            QTimer.singleShot(0, lambda p=position: self._log_panel.add_message(f"Motor en posición: {p}"))
+            self._log_panel.add_message(f"Motor en posición: {position}")
         
         elif event.type == MessageType.EVENT_WEIGHT_READING:
             weight = event.payload.get("weight", 0.0)
-            QTimer.singleShot(0, lambda w=weight: self._weight_display.set_weight(w))
+            # Use throttled weight update to prevent UI lag
+            self.weight_update.emit(weight)
     
     def _on_heartbeat_received(self, health: ConnectionHealth) -> None:
+        # Signal ensures we're on main thread, so direct calls are safe
         if health.is_alive:
-            QTimer.singleShot(0, lambda: self._heartbeat_card.set_value("Active", "connected"))
+            self._heartbeat_card.set_value("Active", "connected")
             if health.heartbeat_count % 10 == 0:
                 uptime_seconds = health.esp32_uptime_ms / 1000
                 if uptime_seconds < 60:
@@ -583,14 +620,28 @@ class MainWindow(QMainWindow):
                     uptime_str = f"{uptime_seconds / 3600:.1f}h"
                 logger.debug(f"Heartbeat #{health.heartbeat_count}: uptime={uptime_str}")
         else:
-            QTimer.singleShot(0, lambda: self._heartbeat_card.set_value("dead", "disconnected"))
-            QTimer.singleShot(0, lambda: self._log_panel.add_message(
+            self._heartbeat_card.set_value("dead", "disconnected")
+            self._log_panel.add_message(
                 "⚠ Conexión perdida - sin heartbeat", is_error=True
-            ))
+            )
             logger.warning("Heartbeat timeout - connection lost")
     
     def _on_acknowledgment_received(self, ack: AcknowledgmentInfo) -> None:
         logger.debug(f"✓ Command '{ack.received_type}' acknowledged (RTT: {ack.round_trip_ms:.1f}ms)")
+    
+    def _on_weight_update_throttled(self, weight: float) -> None:
+        """Throttled weight update handler - queues weight updates to prevent UI lag."""
+        self._pending_weight = weight
+        if not self._weight_throttle_timer.isActive():
+            # Update immediately and start throttle timer
+            self._process_pending_weight()
+            self._weight_throttle_timer.start(self.WEIGHT_UPDATE_THROTTLE_MS)
+    
+    def _process_pending_weight(self) -> None:
+        """Process the pending weight update."""
+        if self._pending_weight is not None:
+            self._weight_display.set_weight(self._pending_weight)
+            self._pending_weight = None
     
     def _check_connected(self) -> bool:
         if not self._session_controller.is_connected:
