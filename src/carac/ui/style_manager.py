@@ -10,13 +10,13 @@ class StyleManager:
             "connected": "statusConnected",
             "disconnected": "statusDisconnected",
             "connecting": "statusConnecting",
-            "error": "statusError"
+            "error": "statusError",
         },
         "system_info": {
             "normal": "systemInfoNormal",
             "connected": "systemInfoConnected",
             "disconnected": "systemInfoDisconnected",
-            "emergency": "systemInfoEmergency"
+            "emergency": "systemInfoEmergency",
         },
         "card_value": {
             "connected": "cardValueConnected",
@@ -25,7 +25,7 @@ class StyleManager:
             "operational": "cardValueOperational",
             "progress": "cardValueProgress",
             "default": "cardValueDefault",
-            "inactive": "cardValueInactive"
+            "inactive": "cardValueInactive",
         },
         "button": {
             "disconnect": "disconnectButton",
@@ -33,8 +33,8 @@ class StyleManager:
             "start": "startButton",
             "warning": "warningButton",
             "secondary": "secondaryButton",
-            "preset_selected": "presetSelectedButton"
-        }
+            "preset_selected": "presetSelectedButton",
+        },
     }
 
     def __init__(self) -> None:
@@ -42,7 +42,7 @@ class StyleManager:
         combined_styles = []
         for qss_file in self.QSS_FILES:
             try:
-                with open(qss_path / qss_file, 'r', encoding='utf-8') as f:
+                with open(qss_path / qss_file, "r", encoding="utf-8") as f:
                     logger.debug(f"Loaded stylesheet: {qss_file}")
                     combined_styles.append(f"/* {qss_file} */\n{f.read()}\n")
             except FileNotFoundError:
@@ -51,7 +51,7 @@ class StyleManager:
 
     def get_combined_stylesheet(self) -> str:
         return self._combined_stylesheet
-    
+
     def apply_status_style(self, widget, status: str) -> None:
         self._apply_style(widget, status.lower(), "status")
 

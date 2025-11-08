@@ -47,7 +47,7 @@ class ConnectionMonitor:
         self._heartbeat_callback: Callable[[ConnectionHealth], None] | None = None
         self._timeout_callback: Callable[[], None] | None = None
         self._ack_callback: Callable[[AcknowledgmentInfo], None] | None = None
-    
+
     def start_monitoring(self) -> None:
         if self._monitoring:
             logger.warning("Connection monitoring already active")
@@ -68,7 +68,7 @@ class ConnectionMonitor:
             self._health = ConnectionHealth()
             self._pending_acks.clear()
             self._last_ack = None
-    
+
     def handle_heartbeat(self, uptime_ms: int, status: str) -> None:
         current_time = time.time()
         with self._lock:
@@ -83,24 +83,21 @@ class ConnectionMonitor:
                 last_heartbeat_time=self._health.last_heartbeat_time,
                 esp32_uptime_ms=self._health.esp32_uptime_ms,
                 seconds_since_heartbeat=self._health.seconds_since_heartbeat,
-                heartbeat_count=self._health.heartbeat_count
+                heartbeat_count=self._health.heartbeat_count,
             )
-
         if not previous_alive:
             logger.info("Connection restored - heartbeat received")
         logger.debug(
             f"Heartbeat #{health_snapshot.heartbeat_count}: "
             f"uptime={uptime_ms}ms, status={status}"
         )
-        
         if not self._heartbeat_callback:
             return
-
         try:
             self._heartbeat_callback(health_snapshot)
         except Exception as e:
             logger.error(f"Error in heartbeat callback: {e}")
-    
+
     def handle_acknowledgment(self, received_type: str, timestamp: int) -> None:
         current_time = time.time()
         with self._lock:
@@ -110,23 +107,21 @@ class ConnectionMonitor:
                 received_type=received_type,
                 timestamp=timestamp,
                 sent_time=sent_time,
-                round_trip_ms=round_trip_ms
+                round_trip_ms=round_trip_ms,
             )
             self._last_ack = ack_info
-
         logger.debug(f"✓ ACK for '{received_type}' (RTT: {round_trip_ms:.1f}ms)")
         if not self._ack_callback:
             return
-
         try:
             self._ack_callback(ack_info)
         except Exception as e:
             logger.error(f"Error in ACK callback: {e}")
-    
+
     def register_command_sent(self, command_type: str) -> None:
         with self._lock:
             self._pending_acks[command_type] = time.time()
-    
+
     def get_health(self) -> ConnectionHealth:
         with self._lock:
             return ConnectionHealth(
@@ -134,22 +129,24 @@ class ConnectionMonitor:
                 last_heartbeat_time=self._health.last_heartbeat_time,
                 esp32_uptime_ms=self._health.esp32_uptime_ms,
                 seconds_since_heartbeat=self._health.seconds_since_heartbeat,
-                heartbeat_count=self._health.heartbeat_count
+                heartbeat_count=self._health.heartbeat_count,
             )
-    
+
     def get_last_acknowledgment(self) -> AcknowledgmentInfo | None:
         with self._lock:
             return self._last_ack
-    
-    def set_heartbeat_callback(self, callback: Callable[[ConnectionHealth], None]) -> None:
+
+    def set_heartbeat_callback(
+        self, callback: Callable[[ConnectionHealth], None]
+    ) -> None:
         self._heartbeat_callback = callback
-    
+
     def set_timeout_callback(self, callback: Callable[[], None]) -> None:
         self._timeout_callback = callback
-    
+
     def set_ack_callback(self, callback: Callable[[AcknowledgmentInfo], None]) -> None:
         self._ack_callback = callback
-    
+
     def _monitor_loop(self) -> None:
         while self._monitoring:
             self._check_heartbeat_timeout(time.time())
@@ -158,7 +155,6 @@ class ConnectionMonitor:
     def _check_heartbeat_timeout(self, current_time: float) -> None:
         health_snapshot = None
         timeout_detected = False
-        
         with self._lock:
             if self._health.last_heartbeat_time <= 0:
                 return
@@ -167,32 +163,30 @@ class ConnectionMonitor:
             if self._health.is_alive and elapsed > self.heartbeat_timeout_seconds:
                 self._health.is_alive = False
                 timeout_detected = True
-                logger.warning(f"Connection timeout detected (no heartbeat for {elapsed:.1f}s)")
+                logger.warning(
+                    f"Connection timeout detected (no heartbeat for {elapsed:.1f}s)"
+                )
                 health_snapshot = ConnectionHealth(
                     is_alive=self._health.is_alive,
                     last_heartbeat_time=self._health.last_heartbeat_time,
                     esp32_uptime_ms=self._health.esp32_uptime_ms,
                     seconds_since_heartbeat=self._health.seconds_since_heartbeat,
-                    heartbeat_count=self._health.heartbeat_count
+                    heartbeat_count=self._health.heartbeat_count,
                 )
-        
         if not timeout_detected or not health_snapshot:
             return
-
         if self._heartbeat_callback:
             try:
                 self._heartbeat_callback(health_snapshot)
             except Exception as e:
                 logger.error(f"Error in heartbeat callback: {e}")
-
         if self._timeout_callback:
             try:
                 self._timeout_callback()
             except Exception as e:
                 logger.error(f"Error in timeout callback: {e}")
-    
+
     @property
     def is_alive(self) -> bool:
         with self._lock:
             return self._health.is_alive
-

@@ -22,55 +22,51 @@ class PhotoControlPanel(QGroupBox):
     stop_sequence_requested = Signal()
     emergency_stop_requested = Signal()
     led_toggle_requested = Signal()
-    
+
     BUTTON_HEIGHT_SMALL = 20
     BUTTON_HEIGHT_MEDIUM = 22
     BUTTON_HEIGHT_LARGE = 24
     LED_STATUS_SIZE = 16
-    
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__("Control de Fotografía", parent)
         self._setup_ui()
-    
+
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setSpacing(5)
         layout.setContentsMargins(6, 6, 6, 6)
-        
         self._add_individual_controls(layout)
         self._add_separator(layout)
         self._add_sequence_controls(layout)
         self._add_test_controls(layout)
-    
+
     def _add_individual_controls(self, layout: QVBoxLayout) -> None:
         steps_label = QLabel("Controles Individuales")
         steps_label.setObjectName("sectionLabel")
         layout.addWidget(steps_label)
-        
         grid = QGridLayout()
         grid.setSpacing(3)
-        
         self._position_forward_btn = QPushButton("Mover a Luz")
         self._position_forward_btn.setMinimumHeight(self.BUTTON_HEIGHT_MEDIUM)
         self._position_forward_btn.setMaximumHeight(self.BUTTON_HEIGHT_MEDIUM)
         self._position_forward_btn.setToolTip("Mueve el motor para poner la moneda bajo la luz")
         self._position_forward_btn.clicked.connect(self.position_forward_requested.emit)
         grid.addWidget(self._position_forward_btn, 0, 0)
-        
         self._position_backward_btn = QPushButton("Retornar Moneda")
         self._position_backward_btn.setMinimumHeight(self.BUTTON_HEIGHT_MEDIUM)
         self._position_backward_btn.setMaximumHeight(self.BUTTON_HEIGHT_MEDIUM)
-        self._position_backward_btn.setToolTip("Mueve el motor para retornar la moneda a su posición inicial")
+        self._position_backward_btn.setToolTip(
+            "Mueve el motor para retornar la moneda a su posición inicial"
+        )
         self._position_backward_btn.clicked.connect(self.position_backward_requested.emit)
         grid.addWidget(self._position_backward_btn, 0, 1)
-        
         self._flip_coin_btn = QPushButton("Voltear Moneda")
         self._flip_coin_btn.setMinimumHeight(self.BUTTON_HEIGHT_MEDIUM)
         self._flip_coin_btn.setMaximumHeight(self.BUTTON_HEIGHT_MEDIUM)
         self._flip_coin_btn.setToolTip("Voltea la moneda usando los servos")
         self._flip_coin_btn.clicked.connect(self.flip_coin_requested.emit)
         grid.addWidget(self._flip_coin_btn, 1, 0, 1, 2)
-        
         self._take_photo_btn = QPushButton("Tomar Foto")
         self._take_photo_btn.setMinimumHeight(self.BUTTON_HEIGHT_MEDIUM)
         self._take_photo_btn.setMaximumHeight(self.BUTTON_HEIGHT_MEDIUM)
@@ -78,28 +74,24 @@ class PhotoControlPanel(QGroupBox):
         self._take_photo_btn.setVisible(False)
         self._take_photo_btn.clicked.connect(self.take_photo_requested.emit)
         grid.addWidget(self._take_photo_btn, 2, 0, 1, 2)
-        
         layout.addLayout(grid)
-    
+
     def _add_separator(self, layout: QVBoxLayout) -> None:
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
         separator.setObjectName("separator")
         layout.addWidget(separator)
-    
+
     def _add_sequence_controls(self, layout: QVBoxLayout) -> None:
         sequence_label = QLabel("Secuencia Completa")
         sequence_label.setObjectName("sectionLabel")
         layout.addWidget(sequence_label)
-        
         info_label = QLabel("Voltea moneda → Espera 5s → Voltea → Retorna")
         info_label.setObjectName("infoLabel")
         info_label.setWordWrap(True)
         layout.addWidget(info_label)
-        
         buttons_layout = QHBoxLayout()
         buttons_layout.setSpacing(3)
-        
         self._start_button = QPushButton("Iniciar Secuencia")
         style_manager.apply_button_style(self._start_button, "start")
         self._start_button.setMinimumHeight(self.BUTTON_HEIGHT_LARGE)
@@ -107,7 +99,6 @@ class PhotoControlPanel(QGroupBox):
         self._start_button.setToolTip("Ejecuta: voltear → esperar 5s → voltear → retornar moneda")
         self._start_button.clicked.connect(self.start_sequence_requested.emit)
         buttons_layout.addWidget(self._start_button)
-        
         self._stop_button = QPushButton("Detener")
         style_manager.apply_button_style(self._stop_button, "warning")
         self._stop_button.setMinimumHeight(self.BUTTON_HEIGHT_LARGE)
@@ -115,32 +106,28 @@ class PhotoControlPanel(QGroupBox):
         self._stop_button.setEnabled(False)
         self._stop_button.clicked.connect(self.stop_sequence_requested.emit)
         buttons_layout.addWidget(self._stop_button)
-        
         layout.addLayout(buttons_layout)
-    
+
     def _add_test_controls(self, layout: QVBoxLayout) -> None:
         test_layout = QHBoxLayout()
-        
         self._toggle_led_button = QPushButton("LED de Prueba")
         style_manager.apply_button_style(self._toggle_led_button, "warning")
         self._toggle_led_button.setMinimumHeight(self.BUTTON_HEIGHT_SMALL)
         self._toggle_led_button.setMaximumHeight(self.BUTTON_HEIGHT_SMALL)
         self._toggle_led_button.clicked.connect(self.led_toggle_requested.emit)
         test_layout.addWidget(self._toggle_led_button)
-        
         self._led_status_label = QLabel("●")
         self._led_status_label.setFixedSize(self.LED_STATUS_SIZE, self.LED_STATUS_SIZE)
         self._led_status_label.setAlignment(Qt.AlignCenter)
         self._led_status_label.setObjectName("ledStatusOff")
         self._led_status_label.setToolTip("Estado del LED del Arduino")
         test_layout.addWidget(self._led_status_label)
-        
         layout.addLayout(test_layout)
-    
+
     def set_sequence_active(self, active: bool) -> None:
         self._start_button.setEnabled(not active)
         self._stop_button.setEnabled(active)
-    
+
     def set_led_status(self, led_on: bool) -> None:
         if led_on:
             self._led_status_label.setObjectName("ledStatusOn")
@@ -149,6 +136,6 @@ class PhotoControlPanel(QGroupBox):
             self._led_status_label.setObjectName("ledStatusOff")
             self._led_status_label.setToolTip("LED apagado")
         style_manager.refresh_widget_style(self._led_status_label)
-    
+
     def set_system_info(self, text: str, state: str = "normal") -> None:
         pass

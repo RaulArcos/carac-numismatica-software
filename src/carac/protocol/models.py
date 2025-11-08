@@ -67,8 +67,8 @@ class Message(BaseModel):
                     payload={
                         "message": "Empty message received",
                         "error_code": ErrorCode.PARSE_ERROR,
-                        "data": {"raw": data}
-                    }
+                        "data": {"raw": data},
+                    },
                 )
             return cls(**json.loads(data.strip()))
         except (json.JSONDecodeError, ValueError) as e:
@@ -77,16 +77,18 @@ class Message(BaseModel):
                 payload={
                     "message": f"Failed to parse message: {e}",
                     "error_code": ErrorCode.PARSE_ERROR,
-                    "data": {"raw": data}
-                }
+                    "data": {"raw": data},
+                },
             )
 
 
 class LightingSetCommand(Message):
     @classmethod
     def create(cls, channel: str, intensity: int) -> "LightingSetCommand":
-        return cls(type=MessageType.LIGHTING_SET, payload={"channel": channel, "intensity": intensity})
-    
+        return cls(
+            type=MessageType.LIGHTING_SET, payload={"channel": channel, "intensity": intensity}
+        )
+
     @classmethod
     def create_sections(cls, sections: dict[str, int]) -> "LightingSetCommand":
         return cls(type=MessageType.LIGHTING_SET, payload={"sections": sections})
@@ -94,13 +96,20 @@ class LightingSetCommand(Message):
 
 class PhotoSequenceStartCommand(Message):
     @classmethod
-    def create(cls, count: int = 5, delay: float = 1.0, auto_flip: bool = False) -> "PhotoSequenceStartCommand":
-        return cls(type=MessageType.PHOTO_SEQUENCE_START, payload={"count": count, "delay": delay, "auto_flip": auto_flip})
+    def create(
+        cls, count: int = 5, delay: float = 1.0, auto_flip: bool = False
+    ) -> "PhotoSequenceStartCommand":
+        return cls(
+            type=MessageType.PHOTO_SEQUENCE_START,
+            payload={"count": count, "delay": delay, "auto_flip": auto_flip},
+        )
 
 
 class MotorPositionCommand(Message):
     @classmethod
-    def create(cls, direction: Literal["forward", "backward"], steps: int | None = None) -> "MotorPositionCommand":
+    def create(
+        cls, direction: Literal["forward", "backward"], steps: int | None = None
+    ) -> "MotorPositionCommand":
         payload = {"direction": direction}
         if steps is not None:
             payload["steps"] = steps
@@ -116,7 +125,10 @@ class MotorFlipCommand(Message):
 class CameraTriggerCommand(Message):
     @classmethod
     def create(cls, duration: int | None = None) -> "CameraTriggerCommand":
-        return cls(type=MessageType.CAMERA_TRIGGER, payload={"duration": duration} if duration is not None else {})
+        return cls(
+            type=MessageType.CAMERA_TRIGGER,
+            payload={"duration": duration} if duration is not None else {},
+        )
 
 
 class SystemPingCommand(Message):
@@ -177,25 +189,17 @@ class Response(BaseModel):
             return cls(
                 success=True,
                 message=msg.payload.get("message", "Success"),
-                data=msg.payload.get("data", {})
+                data=msg.payload.get("data", {}),
             )
         elif msg.type == MessageType.RESPONSE_ERROR:
             return cls(
                 success=False,
                 message=msg.payload.get("message", "Error"),
-                data=msg.payload.get("data", {})
+                data=msg.payload.get("data", {}),
             )
         elif msg.type == MessageType.RESPONSE_STATUS:
-            return cls(
-                success=True,
-                message="Status retrieved",
-                data=msg.payload
-            )
-        return cls(
-            success=True,
-            message=f"Event: {msg.type}",
-            data=msg.payload
-        )
+            return cls(success=True, message="Status retrieved", data=msg.payload)
+        return cls(success=True, message=f"Event: {msg.type}", data=msg.payload)
 
     @classmethod
     def from_serial(cls, data: str) -> "Response":

@@ -2,11 +2,19 @@ PresetValues = dict[str, int]
 
 
 def _create_uniform_preset(intensity: int) -> PresetValues:
-    return {f"ring{ring}_section{section}": intensity for ring in range(1, 5) for section in range(1, 5)}
+    return {
+        f"ring{ring}_section{section}": intensity
+        for ring in range(1, 5)
+        for section in range(1, 5)
+    }
 
 
 def _create_section_preset(section_intensities: list[int]) -> PresetValues:
-    return {f"ring{ring}_section{section}": section_intensities[section - 1] for ring in range(1, 5) for section in range(1, 5)}
+    return {
+        f"ring{ring}_section{section}": section_intensities[section - 1]
+        for ring in range(1, 5)
+        for section in range(1, 5)
+    }
 
 
 class PresetService:

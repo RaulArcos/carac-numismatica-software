@@ -41,26 +41,27 @@ def is_arduino_port(port: str) -> bool:
     search_fields = [
         str(info.get("description", "")).lower(),
         str(info.get("manufacturer", "")).lower(),
-        str(info.get("product", "")).lower()
+        str(info.get("product", "")).lower(),
     ]
-    return any(indicator in field for field in search_fields for indicator in ARDUINO_INDICATORS)
+    return any(
+        indicator in field for field in search_fields for indicator in ARDUINO_INDICATORS
+    )
 
 
 def get_arduino_ports() -> list[str]:
     try:
         ports = serial.tools.list_ports.comports()
         arduino_ports = []
-        
         for port in ports:
-            search_text = " ".join([
-                str(port.description or ""),
-                str(port.manufacturer or ""),
-                str(port.product or "")
-            ]).lower()
-            
+            search_text = " ".join(
+                [
+                    str(port.description or ""),
+                    str(port.manufacturer or ""),
+                    str(port.product or ""),
+                ]
+            ).lower()
             if any(indicator in search_text for indicator in ARDUINO_INDICATORS):
                 arduino_ports.append(port.device)
-        
         logger.info(f"Found {len(arduino_ports)} Arduino ports: {arduino_ports}")
         return arduino_ports
     except Exception as e:

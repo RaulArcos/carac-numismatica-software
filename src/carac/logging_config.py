@@ -6,7 +6,6 @@ from loguru import logger
 
 def setup_logging() -> None:
     logger.remove()
-
     if sys.stderr is not None:
         logger.add(
             sys.stderr,
@@ -16,10 +15,9 @@ def setup_logging() -> None:
                 "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
                 "<level>{message}</level>"
             ),
-            level="WARNING",
+            level="DEBUG",
             colorize=True,
         )
-
     log_dir = Path.home() / ".carac" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     logger.add(
@@ -34,5 +32,4 @@ def setup_logging() -> None:
         compression="zip",
         enqueue=True,
     )
-
     logger.info("Logging configured successfully")
