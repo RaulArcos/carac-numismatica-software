@@ -57,6 +57,12 @@ class MainWindow(QMainWindow):
             "section3": 0,
             "section4": 0,
         }
+        self._current_ring_intensities: dict[str, int] = {
+            "ring_1": 0,
+            "ring_2": 0,
+            "ring_3": 0,
+            "ring_4": 0,
+        }
         self._weight_throttle_timer = QTimer()
         self._weight_throttle_timer.setSingleShot(True)
         self._pending_weight: float | None = None
@@ -300,39 +306,40 @@ class MainWindow(QMainWindow):
         self._preset_panel.clear_selection()
         if not self._session_controller.is_connected:
             return
-        sent_count = self._send_section_lighting_commands(section_index, intensity)
-        self._log_section_change(section_index, intensity, sent_count)
+        # Update only the corresponding ring (section_index maps to ring number)
+        # Section 0 -> ring_1, Section 1 -> ring_2, etc.
+        ring_channel = f"ring_{section_index + 1}"
+        self._current_ring_intensities[ring_channel] = intensity
+        success = self._send_all_ring_lighting()
+        self._log_section_change(section_index, intensity, success)
 
-    def _send_section_lighting_commands(
-        self, section_index: int, intensity: int
-    ) -> int:
-        sent_count = 0
-        for ring_idx in range(1, 5):
-            ring_channel = f"ring_{ring_idx}"
-            try:
-                sent = self._session_controller.set_lighting_async(
-                    ring_channel, intensity
-                )
-                if sent:
-                    sent_count += 1
-            except Exception as e:
-                logger.error(f"Error setting lighting for {ring_channel}: {e}")
-        return sent_count
+    def _send_all_ring_lighting(self) -> bool:
+        """Send all 4 ring lighting values in a single message."""
+        try:
+            sent = self._session_controller.set_sections_async(self._current_ring_intensities)
+            if sent:
+                logger.debug(f"Sent all ring lighting values: {self._current_ring_intensities}")
+            else:
+                logger.warning("Failed to send all ring lighting values")
+            return sent
+        except Exception as e:
+            logger.error(f"Error sending all ring lighting values: {e}")
+            return False
 
-    def _log_section_change(self, section_index: int, intensity: int, sent_count: int) -> None:
-        if sent_count == 4:
+    def _log_section_change(self, section_index: int, intensity: int, success: bool) -> None:
+        if success:
             normalized = intensity / LightingConstants.NORMALIZATION_FACTOR
             QTimer.singleShot(
                 ThrottleConstants.LOG_DELAY_MS,
                 lambda si=section_index, n=normalized: self._log_panel.add_message(
-                    f"Sección {si + 1} configurada a {n:.2f} (todos los anillos)"
+                    f"Anillo {si + 1} configurado a {n:.2f}"
                 ),
             )
-        elif sent_count < 4:
+        else:
             QTimer.singleShot(
                 ThrottleConstants.LOG_DELAY_MS,
-                lambda si=section_index, sc=sent_count: self._log_panel.add_message(
-                    f"Error al enviar comando Sección {si + 1} ({sc}/4 anillos)",
+                lambda si=section_index: self._log_panel.add_message(
+                    f"Error al enviar comando Anillo {si + 1}",
                     is_error=True,
                 ),
             )
@@ -364,18 +371,17 @@ class MainWindow(QMainWindow):
     def _apply_preset_lighting(
         self, preset_name: str, ring_intensities: dict[str, int]
     ) -> None:
-        sent_count = 0
-        for ring_channel, intensity in ring_intensities.items():
-            sent = self._session_controller.set_lighting_async(ring_channel, intensity)
-            if sent:
-                sent_count += 1
-        if sent_count == len(ring_intensities):
+        # Update current ring intensities
+        self._current_ring_intensities.update(ring_intensities)
+        # Send all ring values in one message
+        sent = self._session_controller.set_sections_async(self._current_ring_intensities)
+        if sent:
             self._log_panel.add_message(
                 f"Perfil '{preset_name}' aplicado ({len(ring_intensities)} anillos configurados)"
             )
         else:
             self._log_panel.add_message(
-                f"Perfil '{preset_name}' aplicado con errores ({sent_count}/{len(ring_intensities)} anillos)",
+                f"Perfil '{preset_name}' aplicado con errores",
                 is_error=True,
             )
 

@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     firmware_version: str = Field(default="1.0.0")
     lighting_channels: list[str] = Field(
         default=[
+            "ring_1",
+            "ring_2",
+            "ring_3",
+            "ring_4",
             "ring1_section1",
             "ring1_section2",
             "ring1_section3",

@@ -160,9 +160,9 @@ class LightingControlPanel(QGroupBox):
         layout.addLayout(viz_layout)
         controls_layout = QVBoxLayout()
         controls_layout.setSpacing(5)
-        section_names = ["Sección 1", "Sección 2", "Sección 3", "Sección 4"]
+        ring_names = ["Anillo 1", "Anillo 2", "Anillo 3", "Anillo 4"]
         for i in range(self.NUM_SECTIONS):
-            control = LightingControl(section_names[i], i + 1)
+            control = LightingControl(ring_names[i], i + 1)
             control.value_changed.connect(
                 lambda intensity, idx=i: self._on_section_changed(idx, intensity)
             )
