@@ -164,6 +164,17 @@ class SessionController:
         logger.info("Failed to toggle LED")
         return None
 
+    def set_backlight(self, enabled: bool) -> Response | None:
+        if not self._arduino_client.is_connected:
+            logger.warning("Not connected to ESP32")
+            return None
+        response = self._arduino_client.set_backlight(enabled)
+        if response and response.success:
+            logger.info(f"Backlight {'enabled' if enabled else 'disabled'} successfully")
+            return response
+        logger.info(f"Failed to {'enable' if enabled else 'disable'} backlight")
+        return None
+
     def motor_position(self, direction: str, steps: int | None = None) -> bool:
         if not self._arduino_client.is_connected:
             logger.warning("Not connected to ESP32")

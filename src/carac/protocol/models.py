@@ -16,6 +16,7 @@ class MessageType(str, Enum):
     SYSTEM_RESET = "system_reset"
     SYSTEM_EMERGENCY_STOP = "system_emergency_stop"
     TEST_LED_TOGGLE = "test_led_toggle"
+    SET_BACKLIGHT = "set_backlight"
     RESPONSE_SUCCESS = "response_success"
     RESPONSE_ERROR = "response_error"
     RESPONSE_STATUS = "response_status"
@@ -159,6 +160,12 @@ class TestLedToggleCommand(Message):
     @classmethod
     def create(cls) -> "TestLedToggleCommand":
         return cls(type=MessageType.TEST_LED_TOGGLE, payload={})
+
+
+class SetBacklightCommand(Message):
+    @classmethod
+    def create(cls, enabled: bool) -> "SetBacklightCommand":
+        return cls(type=MessageType.SET_BACKLIGHT, payload={"enabled": enabled})
 
 
 class ResponseMessage(Message):

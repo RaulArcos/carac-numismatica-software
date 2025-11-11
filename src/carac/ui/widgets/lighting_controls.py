@@ -5,11 +5,13 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QPushButton,
     QSlider,
     QVBoxLayout,
     QWidget,
 )
 
+from ..style_manager import style_manager
 from .cylinder_visualization import CylinderVisualization
 
 
@@ -131,12 +133,70 @@ class LightingControl(QFrame):
         return int(self._slider.value() / self.SLIDER_MAX * self.MAX_INTENSITY)
 
 
+class BacklightControl(QFrame):
+    backlight_toggled = Signal(bool)
+
+    VALUE_LABEL_MIN_WIDTH = 26
+    SECTION_INDICATOR_WIDTH = 30
+    BUTTON_MIN_HEIGHT = 18
+    LAYOUT_SPACING_SMALL = 2
+    LAYOUT_SPACING_MEDIUM = 5
+    LAYOUT_MARGIN = 3
+
+    def __init__(
+        self, section_name: str, section_number: int, parent: QWidget | None = None
+    ) -> None:
+        super().__init__(parent)
+        self._section_number = section_number
+        self._enabled = False
+        self._setup_ui(section_name)
+
+    def _setup_ui(self, section_name: str) -> None:
+        self.setObjectName("lightingControlFrame")
+        layout = QVBoxLayout(self)
+        layout.setSpacing(self.LAYOUT_SPACING_SMALL)
+        layout.setContentsMargins(
+            self.LAYOUT_MARGIN,
+            self.LAYOUT_MARGIN,
+            self.LAYOUT_MARGIN,
+            self.LAYOUT_MARGIN,
+        )
+        header_layout = QHBoxLayout()
+        name_label = QLabel(section_name)
+        name_label.setObjectName("ringNameLabel")
+        header_layout.addWidget(name_label)
+        header_layout.addStretch()
+        self._toggle_button = QPushButton("OFF")
+        self._toggle_button.setMinimumHeight(self.BUTTON_MIN_HEIGHT)
+        self._toggle_button.setMaximumWidth(50)
+        self._toggle_button.clicked.connect(self._on_button_clicked)
+        style_manager.apply_button_style(self._toggle_button, "warning")
+        header_layout.addWidget(self._toggle_button)
+        layout.addLayout(header_layout)
+
+    def _on_button_clicked(self) -> None:
+        self._enabled = not self._enabled
+        self._update_button_state()
+        self.backlight_toggled.emit(self._enabled)
+
+    def _update_button_state(self) -> None:
+        if self._enabled:
+            self._toggle_button.setText("ON")
+        else:
+            self._toggle_button.setText("OFF")
+
+    def set_enabled(self, enabled: bool) -> None:
+        self._enabled = enabled
+        self._update_button_state()
+
+
 class LightingControlPanel(QGroupBox):
     lighting_changed = Signal(str, int)
     section_changed = Signal(int, int)
+    backlight_toggled = Signal(bool)
 
     NUM_SECTIONS = 4
-    NUM_RINGS = 4
+    NUM_RINGS = 3
 
     def __init__(
         self, channels: list[str], parent: QWidget | None = None
@@ -147,6 +207,7 @@ class LightingControlPanel(QGroupBox):
         self._section_intensities: list[list[int]] = [
             [0] * self.NUM_SECTIONS for _ in range(self.NUM_RINGS)
         ]
+        self._backlight_control: BacklightControl | None = None
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -168,6 +229,10 @@ class LightingControlPanel(QGroupBox):
             )
             controls_layout.addWidget(control)
             self._section_controls.append(control)
+        backlight_control = BacklightControl("BackLight", 5)
+        backlight_control.backlight_toggled.connect(self.backlight_toggled.emit)
+        controls_layout.addWidget(backlight_control)
+        self._backlight_control = backlight_control
         layout.addLayout(controls_layout)
 
     def _on_section_changed(self, section_index: int, intensity: int) -> None:
@@ -176,8 +241,22 @@ class LightingControlPanel(QGroupBox):
             channel = f"ring{ring_index + 1}_section{section_index + 1}"
             if channel in self._channels:
                 self.lighting_changed.emit(channel, intensity)
-        self._cylinder_viz.set_section_intensities(self._section_intensities)
+        self._update_visualization()
         self.section_changed.emit(section_index, intensity)
+
+    def _update_visualization(self) -> None:
+        synchronized_intensities = []
+        for ring_index in range(self.NUM_RINGS):
+            ring_intensities = []
+            for section_index in range(self.NUM_SECTIONS):
+                section_intensities = [
+                    self._section_intensities[r][section_index]
+                    for r in range(self.NUM_RINGS)
+                ]
+                synchronized_intensity = section_intensities[0]
+                ring_intensities.append(synchronized_intensity)
+            synchronized_intensities.append(ring_intensities)
+        self._cylinder_viz.set_section_intensities(synchronized_intensities)
 
     def set_channel_value(self, channel: str, intensity: int) -> None:
         if "_" not in channel:
@@ -194,7 +273,7 @@ class LightingControlPanel(QGroupBox):
             section_idx = int(parts[1].replace("section", "")) - 1
             if 0 <= ring_idx < self.NUM_RINGS and 0 <= section_idx < self.NUM_SECTIONS:
                 self._section_intensities[ring_idx][section_idx] = intensity
-                self._cylinder_viz.set_section_intensities(self._section_intensities)
+                self._update_visualization()
         except (ValueError, IndexError):
             pass
 
@@ -207,7 +286,7 @@ class LightingControlPanel(QGroupBox):
         control.blockSignals(False)
         for ring_index in range(self.NUM_RINGS):
             self._section_intensities[ring_index][section_index] = intensity
-        self._cylinder_viz.set_section_intensities(self._section_intensities)
+        self._update_visualization()
 
     def set_all_values(self, values: dict[str, int]) -> None:
         for channel, intensity in values.items():

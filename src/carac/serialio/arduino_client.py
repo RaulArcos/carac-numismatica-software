@@ -16,6 +16,7 @@ from ..protocol.models import (
     MotorPositionCommand,
     PhotoSequenceStartCommand,
     Response,
+    SetBacklightCommand,
     SystemEmergencyStopCommand,
     SystemPingCommand,
     SystemResetCommand,
@@ -196,6 +197,9 @@ class ArduinoClient:
     def toggle_led(self) -> Response | None:
         return self.send_command(TestLedToggleCommand.create())
 
+    def set_backlight(self, enabled: bool) -> Response | None:
+        return self.send_command(SetBacklightCommand.create(enabled))
+
     def motor_position(self, direction: str, steps: int | None = None) -> Response | None:
         return self.send_command(MotorPositionCommand.create(direction, steps))
 
@@ -311,6 +315,7 @@ class ArduinoClient:
             MessageType.MOTOR_FLIP,
             MessageType.CAMERA_TRIGGER,
             MessageType.TEST_LED_TOGGLE,
+            MessageType.SET_BACKLIGHT,
         ):
             has_error = (
                 "error" in message.payload or "error_code" in message.payload

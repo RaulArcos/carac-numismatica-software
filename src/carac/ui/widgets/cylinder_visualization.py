@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QWidget
 
 
 class CylinderVisualization(QWidget):
-    RING_COUNT = 4
+    RING_COUNT = 3
     SECTION_COUNT = 4
     MIN_WIDTH = 100
     MIN_HEIGHT = 170

@@ -192,6 +192,7 @@ class MainWindow(QMainWindow):
         self._connection_panel.connection_toggle_requested.connect(self._toggle_connection)
         self._port_refresh_thread.ports_updated.connect(self._update_port_list)
         self._lighting_panel.section_changed.connect(self._on_section_changed)
+        self._lighting_panel.backlight_toggled.connect(self._on_backlight_toggled)
         self._preset_panel.preset_selected.connect(self._on_preset_selected)
         self._photo_panel.position_forward_requested.connect(self._on_position_forward)
         self._photo_panel.position_backward_requested.connect(self._on_position_backward)
@@ -531,6 +532,17 @@ class MainWindow(QMainWindow):
             self._log_panel.add_message(f"LED de prueba {state_text}")
         else:
             self._log_panel.add_message("Error al alternar LED de prueba", is_error=True)
+
+    def _on_backlight_toggled(self, enabled: bool) -> None:
+        if not self._check_connected():
+            return
+        state_text = "activado" if enabled else "desactivado"
+        self._log_panel.add_message(f"Backlight LED {state_text}...")
+        response = self._session_controller.set_backlight(enabled)
+        if response and response.success:
+            self._log_panel.add_message(f"Backlight LED {state_text}")
+        else:
+            self._log_panel.add_message(f"Error al {state_text} backlight LED", is_error=True)
 
     def _on_emergency_stop(self) -> None:
         if not self._check_connected():
